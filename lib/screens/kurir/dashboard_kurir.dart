@@ -3,6 +3,7 @@ import '../services/dashboard_kurir_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login_screen.dart';
 import '../kurir/JadwalJemputScreen.dart';
+import 'ProfilKurirScreen.dart';
 import 'ScanBarcode.dart';
 
 const primary = Color(0xFF2F6B2F);
@@ -64,11 +65,16 @@ class _DashboardKurirState extends State<DashboardKurir> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: primary)),
       );
     }
 
-    // Menggunakan PopScope sebagai pengganti WillPopScope yang deprecated
+    // Ambil ID jadwal aktif dari payload API Laravel kamu
+    int idJadwalAktif = dashboardData?['jadwal']?['id'] ?? 0;
+
+    // Ambil list riwayat aktivitas dari database jika ada di JSON, jika tidak ada fallback ke list kosong []
+    List<dynamic> aktivitasTerbaru = dashboardData?['aktivitas_terbaru'] ?? [];
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -103,7 +109,6 @@ class _DashboardKurirState extends State<DashboardKurir> {
             children: [
               _HeaderSection(onLogout: logout),
 
-              // Menggunakan Transform.translate untuk efek menumpuk ke atas (aman dari error padding)
               Transform.translate(
                 offset: const Offset(0, -30),
                 child: Padding(
@@ -112,7 +117,6 @@ class _DashboardKurirState extends State<DashboardKurir> {
                 ),
               ),
 
-              // Berikan kompensasi jarak agar konten di bawahnya tidak menabrak kartu yang dinaikkan
               Transform.translate(
                 offset: const Offset(0, -15),
                 child: Padding(
@@ -129,11 +133,27 @@ class _DashboardKurirState extends State<DashboardKurir> {
                       const SizedBox(height: 28),
                       _sectionTitle("Performa Bulan Ini"),
                       const SizedBox(height: 16),
-                      const _InsightCard(),
+                      _InsightCard(dashboardData: dashboardData),
                       const SizedBox(height: 28),
                       _sectionTitle("Aktivitas Terbaru"),
                       const SizedBox(height: 16),
-                      ...dummyHistory.map((e) => _ActivityCard(data: e)),
+
+                      // DInamis: Jika database memiliki data riwayat, tampilkan. Jika kosong, beri info.
+                      aktivitasTerbaru.isEmpty
+                          ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: cardDecoration(),
+                        child: const Center(
+                          child: Text(
+                            "Belum ada aktivitas transaksi hari ini",
+                            style: TextStyle(color: greyText, fontSize: 13),
+                          ),
+                        ),
+                      )
+                          : Column(
+                        children: aktivitasTerbaru.map((item) => _ActivityCard(data: item)).toList(),
+                      ),
                       const SizedBox(height: 120),
                     ],
                   ),
@@ -143,8 +163,8 @@ class _DashboardKurirState extends State<DashboardKurir> {
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: const _ScanFab(),
-        bottomNavigationBar: const _PremiumBottomNav(),
+        floatingActionButton: _ScanFab(jadwalId: idJadwalAktif),
+        bottomNavigationBar: _PremiumBottomNav(onRefresh: getDashboard),
       ),
     );
   }
@@ -170,6 +190,10 @@ class _TodaySummarySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Menghubungkan variabel total hasil timbangan & pendapatan dari database jika tersedia di API
+    String totalBeratHariIni = dashboardData?['total_berat_hari_ini']?.toString() ?? '0';
+    String totalPendapatanHariIni = dashboardData?['total_pendapatan_hari_ini']?.toString() ?? '0';
+
     return Row(
       children: [
         Expanded(
@@ -185,8 +209,8 @@ class _TodaySummarySection extends StatelessWidget {
           child: _SummaryCard(
             icon: Icons.recycling,
             title: "Hasil Hari Ini",
-            value: "12 Kg",
-            subtitle: "Rp45K",
+            value: "$totalBeratHariIni Kg",
+            subtitle: "Rp $totalPendapatanHariIni",
           ),
         ),
       ],
@@ -251,11 +275,15 @@ class _QuickActionsRow extends StatelessWidget {
         _MiniActionCard(
           icon: Icons.list_alt_outlined,
           title: "Daftar Jemput",
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const JadwalJemputScreen()),
             );
+            if (result == true) {
+              final state = context.findAncestorStateOfType<_DashboardKurirState>();
+              state?.getDashboard();
+            }
           },
         ),
         const _MiniActionCard(icon: Icons.map_outlined, title: "Map"),
@@ -312,7 +340,8 @@ class _MiniActionCard extends StatelessWidget {
 }
 
 class _PremiumBottomNav extends StatelessWidget {
-  const _PremiumBottomNav();
+  final VoidCallback onRefresh;
+  const _PremiumBottomNav({required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -325,30 +354,69 @@ class _PremiumBottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _navItem(icon: Icons.home, label: "Beranda", active: true),
-          _navItem(icon: Icons.history, label: "Riwayat"),
+          _navItem(
+            icon: Icons.home,
+            label: "Beranda",
+            active: true,
+            onTap: () {},
+          ),
+          _navItem(
+            icon: Icons.history,
+            label: "Riwayat",
+            onTap: () {},
+          ),
           const SizedBox(width: 40),
-          _navItem(icon: Icons.notifications_none, label: "Notif"),
-          _navItem(icon: Icons.person_outline, label: "Profil"),
+          _navItem(
+            icon: Icons.notifications_none,
+            label: "Notif",
+            onTap: () {},
+          ),
+          _navItem(
+            icon: Icons.person_outline,
+            label: "Profil",
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfilKurirScreen()),
+              );
+              onRefresh();
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _navItem({required IconData icon, required String label, bool active = false}) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 22, color: active ? primary : Colors.grey),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? primary : Colors.grey)),
-      ],
+  Widget _navItem({
+    required IconData icon,
+    required String label,
+    bool active = false,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: active ? primary : Colors.grey),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: active ? primary : Colors.grey,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _ScanFab extends StatelessWidget {
-  const _ScanFab();
+  final int jadwalId;
+  const _ScanFab({required this.jadwalId});
 
   @override
   Widget build(BuildContext context) {
@@ -368,11 +436,16 @@ class _ScanFab extends StatelessWidget {
       child: FloatingActionButton(
         elevation: 0,
         backgroundColor: primary,
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ScanBarcodePage()),
+            MaterialPageRoute(builder: (context) => ScanBarcodePage(jadwalId: jadwalId)),
           );
+
+          if (result == true) {
+            final state = context.findAncestorStateOfType<_DashboardKurirState>();
+            state?.getDashboard();
+          }
         },
         child: const Icon(Icons.qr_code_scanner, size: 30, color: Colors.white),
       ),
@@ -474,9 +547,11 @@ class _ActiveMissionCard extends StatelessWidget {
     final String? fotoPath = dashboardData?['jadwal']?['kurir']?['foto'];
     const String baseUrlServer = "http://192.168.100.48:8000";
 
-    // Hitung tugas untuk visualisasi progres linier secara dinamis
     int totalTugas = dashboardData?['total_pesanan'] ?? 0;
-    double progressValue = totalTugas > 0 ? 0.5 : 0.0; // Simulasi progres dinamis aman
+    // Ambil data pesanan selesai dari API untuk hitung progress bar linier secara akurat
+    int tugasSelesai = dashboardData?['total_pesanan_selesai'] ?? 0;
+    double progressValue = totalTugas > 0 ? (tugasSelesai / totalTugas) : 0.0;
+    int progressPercent = (progressValue * 100).toInt();
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -558,7 +633,7 @@ class _ActiveMissionCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                totalTugas > 0 ? "50% selesai" : "0% selesai",
+                "$progressPercent% selesai",
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const Spacer(),
@@ -583,12 +658,16 @@ class _ActiveMissionCard extends StatelessWidget {
 
   static Widget _startButton(BuildContext context) {
     return ElevatedButton.icon(
-      // Mengarahkan kurir langsung ke halaman JadwalJemput saat diklik
-      onPressed: () {
-        Navigator.push(
+      onPressed: () async {
+        final result = await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const JadwalJemputScreen()),
         );
+
+        if (result == true) {
+          final state = context.findAncestorStateOfType<_DashboardKurirState>();
+          state?.getDashboard();
+        }
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
@@ -605,19 +684,24 @@ class _ActiveMissionCard extends StatelessWidget {
 }
 
 class _InsightCard extends StatelessWidget {
-  const _InsightCard();
+  final Map<String, dynamic>? dashboardData;
+  const _InsightCard({this.dashboardData});
 
   @override
   Widget build(BuildContext context) {
+    // Membaca data performa bulanan secara dinamis dari database jika dikirim oleh API
+    String beratBulanIni = dashboardData?['berat_bulan_ini']?.toString() ?? '0';
+    String keteranganTren = dashboardData?['keterangan_tren'] ?? 'Tetap semangat mengumpulkan sampah lingkungan.';
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: cardDecoration(),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
-              "Anda mengumpulkan 10 Kg sampah bulan ini.\nNaik 3 Kg dari bulan lalu.",
-              style: TextStyle(height: 1.6),
+              "Anda mengumpulkan $beratBulanIni Kg sampah bulan ini.\n$keteranganTren",
+              style: const TextStyle(height: 1.6),
             ),
           ),
           const Icon(Icons.trending_up, size: 44, color: primary),
@@ -628,11 +712,18 @@ class _InsightCard extends StatelessWidget {
 }
 
 class _ActivityCard extends StatelessWidget {
-  final HistoryModel data;
+  // Menggunakan tipe data Map<String, dynamic> dinamis bawaan database, bukan dummy model lagi
+  final Map<String, dynamic> data;
   const _ActivityCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
+    // Pemetaan key disesuaikan dengan skema tabel database setor_sampah / jenis_sampah kamu
+    String namaJenis = data['jenis_sampah']?['nama'] ?? 'Sampah';
+    String tanggal = data['created_at_formatted'] ?? data['created_at'] ?? '-';
+    String totalHarga = "Rp " + (data['total']?.toString() ?? '0');
+    String beratSampah = (data['berat']?.toString() ?? '0') + " Kg";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -665,7 +756,7 @@ class _ActivityCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        data.name,
+                        namaJenis,
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -673,7 +764,7 @@ class _ActivityCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(data.date, style: const TextStyle(fontSize: 12, color: greyText)),
+                Text(tanggal, style: const TextStyle(fontSize: 12, color: greyText)),
               ],
             ),
           ),
@@ -682,11 +773,11 @@ class _ActivityCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                data.price,
+                totalHarga,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
               ),
               const SizedBox(height: 4),
-              Text(data.weight, style: const TextStyle(fontSize: 12, color: greyText)),
+              Text(beratSampah, style: const TextStyle(fontSize: 12, color: greyText)),
             ],
           ),
         ],
@@ -706,25 +797,6 @@ class _ActivityCard extends StatelessWidget {
   }
 }
 
-class HistoryModel {
-  final String name;
-  final String date;
-  final String price;
-  final String weight;
-
-  HistoryModel({
-    required this.name,
-    required this.date,
-    required this.price,
-    required this.weight,
-  });
-}
-
-final dummyHistory = [
-  HistoryModel(name: "Organik", date: "10 Des 2025", price: "+Rp2.000", weight: "2 Kg"),
-  HistoryModel(name: "Botol Plastik", date: "08 Des 2025", price: "+Rp4.000", weight: "3 Kg"),
-  HistoryModel(name: "Kertas", date: "05 Des 2025", price: "+Rp3.000", weight: "5 Kg"),
-];
 BoxDecoration cardDecoration() {
   return BoxDecoration(
     color: Colors.white,

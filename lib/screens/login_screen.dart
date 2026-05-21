@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:asriapp/screens/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'; // Tambahkan import ini jika belum ada
 
 // import halaman kamu
 import 'package:asriapp/screens/register_screen.dart';
@@ -26,139 +27,80 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // 🔥 FUNCTION LOGIN
   Future<void> login() async {
-
     setState(() {
       isLoading = true;
     });
 
     try {
-
-      final result =
-      await AuthService
-          .login(
-
-        email:
-        emailController.text,
-
-        password:
-        passwordController.text,
-
+      final result = await AuthService.login(
+        email: emailController.text,
+        password: passwordController.text,
       );
 
-      final status =
-      result['status'];
+      final status = result['status'];
+      final data = result['data'];
 
-      final data =
-      result['data'];
+      if (status == 200) {
+        String token = data['token'] ?? '';
+        String role = data['user']['role'] ?? '';
+        String name = data['user']['name'] ?? '';
+        String? foto = data['user']['foto'];
+        int idUser = data['user']['id'] ?? 0; // Ambil ID User dari data respons Laravel
 
-      String? token;
+        print('TOKEN: $token');
+        print('USER ID LOGIN: $idUser');
 
-      if (
-      status == 200
-      ) {
+        // ==========================================
+        // SIMPAN DATA KE SHAREDPREFERENCES
+        // ==========================================
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', token);
+        await prefs.setInt('user_id', idUser); // Ini kunci agar dashboard & profil tidak kosong!
+        await prefs.setString('role', role);
 
-        token =
-        data['token'];
+        if (!context.mounted) return;
 
-        String role =
-        data['user']['role'];
-
-        String name =
-        data['user']['name'];
-
-        String? foto =
-        data['user']['foto'];
-
-        print(
-          'TOKEN: $token',
-        );
-
-        if (
-        !context.mounted
-        ) return;
-
-        if (
-        role == 'kurir'
-        ) {
-
-          Navigator
-              .pushReplacement(
-
+        if (role == 'kurir') {
+          Navigator.pushReplacement(
             context,
-
             MaterialPageRoute(
-
-              builder: (_) =>
-
-                  DashboardKurir(),
-
+              builder: (_) => const DashboardKurir(),
             ),
           );
-
         } else {
-
-          Navigator
-              .pushReplacement(
-
+          Navigator.pushReplacement(
             context,
-
             MaterialPageRoute(
-
-              builder: (_) =>
-
-                  DashboardScreen(
-
-                    name: name,
-
-                    foto: foto,
-
-                  ),
-
+              builder: (_) => DashboardScreen(
+                name: name,
+                foto: foto,
+              ),
             ),
           );
         }
-
       } else {
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-
-            content:
-            Text(
-
-              data['message'] ??
-
-                  "Login gagal",
-
-            ),
+            content: Text(data['message'] ?? "Login gagal"),
           ),
         );
       }
-
     } catch (e) {
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-          Text('$e'),
+          content: Text('Error: $e'),
         ),
       );
     }
 
-    if (
-    !mounted
-    ) return;
-
+    if (!mounted) return;
     setState(() {
       isLoading = false;
     });
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -168,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-
               const SizedBox(height: 40),
 
               // 🔥 ICON
@@ -199,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 key: _formKey,
                 child: Column(
                   children: [
-
                     // EMAIL
                     TextFormField(
                       controller: emailController,
