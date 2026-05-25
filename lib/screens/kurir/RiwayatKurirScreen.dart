@@ -3,7 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart'; // 🔥 Untuk memformat tanggal filter
-import '../../config.dart'; // Menghubungkan aman dengan AppConfig Mai
+import '../../config.dart';
+import 'DetailRiwayatScreen.dart'; // Menghubungkan aman dengan AppConfig Mai
 
 // Palet warna kontras tinggi (Senior-Friendly Theme)
 const primaryColor = Color(0xFF1E521E);
@@ -39,8 +40,6 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       int userId = prefs.getInt('user_id') ?? 0;
 
-      // 🛠️ UBAH ENDPOINT: Ganti dari dashboard-kurir ke endpoint riwayat total kamu di Laravel
-      // Contoh di bawah menggunakan /riwayat-kurir/$userId. Sesuaikan dengan route di api.php Laravel-mu.
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/riwayat-kurir/$userId'),
       );
@@ -51,10 +50,14 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
         print("DEBUG DATA RIWAYAT UTUH DARI LARAVEL: $data");
 
         setState(() {
-          // 🛠️ KONDISIONAL KEY: Jika API riwayatmu langsung mengembalikan List data (tanpa dibungkus key),
-          // ganti menjadi: riwayatList = data;
-          // Jika dibungkus dalam key tertentu oleh Laravel (misal 'riwayat'), gunakan data['riwayat']
-          riwayatList = data is List ? data : (data['riwayat'] ?? data['aktivitas_terbaru'] ?? []);
+          // Normalisasi Data: Memastikan response map atau list terbaca dengan aman
+          if (data is List) {
+            riwayatList = data;
+          } else if (data is Map) {
+            riwayatList = data['riwayat'] ?? data['aktivitas_terbaru'] ?? [];
+          } else {
+            riwayatList = [];
+          }
           isLoading = false;
         });
       } else {
@@ -210,7 +213,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
 
                   const SizedBox(height: 12),
 
-                  // SUB-TEKS INFORMASI RINGKASAN (Fix Kurung Error & Rata Tengah)
+                  // SUB-TEKS INFORMASI RINGKASAN
                   Center(
                     child: Text(
                       selectedDate == null
@@ -223,7 +226,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ), // <--- Tanda penutup widget yang sebelumnya hilang
+                  ),
                 ],
               ),
             ),
@@ -270,8 +273,21 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 itemCount: filteredRiwayat.length,
                 itemBuilder: (context, index) {
-                  final item = filteredRiwayat[index];
-                  return _buildRiwayatCard(item);
+                  // Mengonversi secara eksplisit dari dynamic ke Map<String, dynamic>
+                  final Map<String, dynamic> item = Map<String, dynamic>.from(filteredRiwayat[index]);
+
+                  // 🔥 DIBERESKAN: Panggil fungsi kartu yang asli dan bungkus dengan klik detail
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DetailRiwayatScreen(data: item),
+                        ),
+                      );
+                    },
+                    child: _buildRiwayatCard(item),
+                  );
                 },
               ),
             ),
@@ -285,8 +301,8 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
     String namaJenis = data['jenis_sampah']?['nama'] ?? 'Sampah Umum';
     String namaNasabah = data['nasabah']?['name'] ?? 'Nasabah ASRI';
     String tanggal = data['created_at_formatted'] ?? data['created_at'] ?? '-';
-    String totalHarga = "Rp " + (data['total']?.toString() ?? '0');
-    String beratSampah = (data['berat']?.toString() ?? '0') + " Kg";
+    String totalHarga = "Rp ${data['total']?.toString() ?? '0'}";
+    String beratSampah = "${data['berat']?.toString() ?? '0'} Kg";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
