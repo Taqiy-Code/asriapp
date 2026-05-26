@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart'; // 🔥 Untuk memformat tanggal filter
+import 'package:intl/intl.dart';
 import '../../config.dart';
-import 'DetailRiwayatScreen.dart'; // Menghubungkan aman dengan AppConfig Mai
+import 'DetailRiwayatScreen.dart';
 
-// Palet warna kontras tinggi (Senior-Friendly Theme)
+// Palet warna kontras tinggi (Senior-Friendly Theme Basayan Bestari)
 const primaryColor = Color(0xFF1E521E);
 const secondaryColor = Color(0xFF4CAF50);
 const softGreenColor = Color(0xFFE8F5E9);
@@ -24,7 +24,7 @@ class RiwayatKurirScreen extends StatefulWidget {
 class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
   List<dynamic> riwayatList = [];
   bool isLoading = true;
-  DateTime? selectedDate; // 🔥 State untuk menyimpan tanggal filter pilihan kurir
+  DateTime? selectedDate;
 
   @override
   void initState() {
@@ -50,7 +50,6 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
         print("DEBUG DATA RIWAYAT UTUH DARI LARAVEL: $data");
 
         setState(() {
-          // Normalisasi Data: Memastikan response map atau list terbaca dengan aman
           if (data is List) {
             riwayatList = data;
           } else if (data is Map) {
@@ -70,7 +69,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
     }
   }
 
-  // 🔥 FUNGSI MEMBUKA KALENDER DATE PICKER
+  // FUNGSI MEMBUKA KALENDER DATE PICKER
   Future<void> _pilihTanggal(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -81,9 +80,9 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: primaryColor, // Warna header kalender
+              primary: primaryColor,
               onPrimary: Colors.white,
-              onSurface: darkTextColor, // Warna teks tanggal
+              onSurface: darkTextColor,
             ),
           ),
           child: child!,
@@ -106,9 +105,9 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
       );
     }
 
-    // 🔥 LOGIKA FILTERING: Menyaring list data berdasarkan tanggal yang dipilih
+    // LOGIKA FILTERING: Menyaring list data berdasarkan tanggal
     List<dynamic> filteredRiwayat = riwayatList.where((item) {
-      if (selectedDate == null) return true; // Kalau belum pilih tanggal, tampilkan semua
+      if (selectedDate == null) return true;
 
       String rawDate = item['created_at'] ?? '';
       if (rawDate.isEmpty) return false;
@@ -127,7 +126,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
       backgroundColor: backgroundColor,
       body: Column(
         children: [
-          // ================= HEADER RIWAYAT (DI-RAPIKAN & SEJAJAR) =================
+          // HEADER RIWAYAT
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 50, bottom: 20),
@@ -146,14 +145,11 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                 children: [
                   Row(
                     children: [
-                      // TOMBOL BACK
                       IconButton(
                         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 26),
                         onPressed: () => Navigator.pop(context, true),
                       ),
                       const SizedBox(width: 4),
-
-                      // JUDUL HALAMAN (Rata tengah presisi di dalam Row)
                       const Expanded(
                         child: Text(
                           "Catatan Riwayat",
@@ -166,8 +162,6 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                           ),
                         ),
                       ),
-
-                      // TOMBOL FILTER KALENDER
                       IconButton(
                         icon: Icon(
                           selectedDate == null ? Icons.calendar_month_rounded : Icons.filter_alt_rounded,
@@ -179,7 +173,6 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                     ],
                   ),
 
-                  // TAMPILAN BADGE CHIP AKTIF JIKA FILTER DIKENAKAN
                   if (selectedDate != null)
                     Padding(
                       padding: const EdgeInsets.only(left: 14, top: 8, bottom: 4),
@@ -200,7 +193,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                                 const SizedBox(width: 8),
                                 GestureDetector(
                                   onTap: () {
-                                    setState(() { selectedDate = null; }); // Reset filter kembali kosong
+                                    setState(() { selectedDate = null; });
                                   },
                                   child: const Icon(Icons.cancel_rounded, color: Colors.white, size: 16),
                                 )
@@ -212,8 +205,6 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                     ),
 
                   const SizedBox(height: 12),
-
-                  // SUB-TEKS INFORMASI RINGKASAN
                   Center(
                     child: Text(
                       selectedDate == null
@@ -234,7 +225,7 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
 
           const SizedBox(height: 16),
 
-          // ================= DAFTAR RIWAYAT TRANSAKSI DISARING =================
+          // DAFTAR RIWAYAT TRANSAKSI DISARING
           Expanded(
             child: filteredRiwayat.isEmpty
                 ? Center(
@@ -273,10 +264,8 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 itemCount: filteredRiwayat.length,
                 itemBuilder: (context, index) {
-                  // Mengonversi secara eksplisit dari dynamic ke Map<String, dynamic>
                   final Map<String, dynamic> item = Map<String, dynamic>.from(filteredRiwayat[index]);
 
-                  // 🔥 DIBERESKAN: Panggil fungsi kartu yang asli dan bungkus dengan klik detail
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
@@ -297,12 +286,46 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
     );
   }
 
+  // ========================================================
+  // WIDGET KARTU RIWAYAT DENGAN PARSING KATEGORI MULTI-ITEM
+  // ========================================================
   Widget _buildRiwayatCard(Map<String, dynamic> data) {
-    String namaJenis = data['jenis_sampah']?['nama'] ?? 'Sampah Umum';
     String namaNasabah = data['nasabah']?['name'] ?? 'Nasabah ASRI';
-    String tanggal = data['created_at_formatted'] ?? data['created_at'] ?? '-';
-    String totalHarga = "Rp ${data['total']?.toString() ?? '0'}";
-    String beratSampah = "${data['berat']?.toString() ?? '0'} Kg";
+    String rawDate = data['created_at'] ?? '';
+    String tanggal = '-';
+
+    // Parsing tanggal kiriman API agar lebih human-readable
+    if (rawDate.isNotEmpty) {
+      try {
+        DateTime parsedDate = DateTime.parse(rawDate);
+        tanggal = DateFormat('dd MMM yyyy, HH:mm').format(parsedDate) + " WIB";
+      } catch (e) {
+        tanggal = rawDate;
+      }
+    }
+
+    // Formatter Rupiah Lokalan
+    String totalHarga = "Rp " + data['total'].toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+    );
+
+    // 🛠️ LOGIKA BARU KATEGORI MULTI-ITEM: SAMPAH PERTAMA + LAINNYA
+    List<dynamic> details = data['details'] ?? [];
+    String namaJenisTampil = "Sampah Umum";
+
+    if (details.isNotEmpty) {
+      // Ambil nama dari jenis_sampah milik baris index ke-0
+      String sampahPertama = details[0]['jenis_sampah']?['nama'] ?? 'Sampah';
+
+      if (details.length > 1) {
+        namaJenisTampil = "$sampahPertama + ${details.length - 1} lainnya";
+      } else {
+        namaJenisTampil = sampahPertama;
+      }
+    } else if (data['jenis_sampah'] != null) {
+      // Fallback aman jika data penimbangan lama (single item) yang dibaca
+      namaJenisTampil = data['jenis_sampah']['nama'] ?? 'Sampah';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -336,8 +359,9 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: darkTextColor, letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 4),
+                // Menampilkan Kategori Multi-Item Rapi
                 Text(
-                  "Kategori: $namaJenis",
+                  "Kategori: $namaJenisTampil",
                   style: const TextStyle(fontSize: 13, color: primaryColor, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
@@ -349,28 +373,10 @@ class _RiwayatKurirScreenState extends State<RiwayatKurirScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                totalHarga,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: primaryColor),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.shade200, width: 1),
-                ),
-                child: Text(
-                  beratSampah,
-                  style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
+          // Bagian Samping Kanan: Menampilkan Harga Akumulasi Final secara Bold
+          Text(
+            totalHarga,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: primaryColor),
           ),
         ],
       ),

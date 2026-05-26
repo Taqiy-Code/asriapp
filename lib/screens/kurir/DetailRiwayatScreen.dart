@@ -2,10 +2,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:screenshot/screenshot.dart'; // Import library screenshot
 import 'package:gal/gal.dart'; // Import library penyimpan galeri
+import 'package:intl/intl.dart';
 
-// Palet warna kontras tinggi Bank Sampah Mai
+// Palet warna kontras tinggi Bank Sampah Basayan Bestari
 const primaryColor = Color(0xFF1E521E);
 const backgroundColor = Color(0xFFF9FBF9);
+const softGreenColor = Color(0xFFE8F5E9);
 const darkTextColor = Color(0xFF0D240D);
 const greyTextColor = Color(0xFF555555);
 
@@ -19,7 +21,6 @@ class DetailRiwayatScreen extends StatefulWidget {
 }
 
 class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
-  // Controller untuk menangkap gambar widget struk
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isDownloading = false;
 
@@ -30,22 +31,18 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
     });
 
     try {
-      // 1. Cek atau minta izin penyimpanan perangkat sebelum mengeksekusi
       final hasAccess = await Gal.hasAccess();
       if (!hasAccess) {
         await Gal.requestAccess();
       }
 
-      // 2. Tangkap gambar dari widget kertas struk dengan pixelRatio lebih tinggi agar jernih
       final Uint8List? imageBytes = await _screenshotController.capture(
         delay: const Duration(milliseconds: 50),
       );
 
       if (imageBytes != null) {
-        // 3. Simpan bytes gambar langsung ke galeri HP
         await Gal.putImageBytes(imageBytes);
 
-        // 4. Tampilkan notifikasi sukses kepada pengguna
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -80,13 +77,28 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
   @override
   Widget build(BuildContext context) {
     String namaNasabah = widget.data['nasabah']?['name'] ?? 'Nasabah ASRI';
-    String namaJenis = widget.data['jenis_sampah']?['nama'] ?? 'Sampah Umum';
-    String tanggal = widget.data['created_at_formatted'] ?? widget.data['created_at'] ?? '-';
-    String beratSampah = "${widget.data['berat']?.toString() ?? '0'} Kg";
-    String hargaPerKg = "Rp ${widget.data['harga_per_kg']?.toString() ?? '0'}";
-    String totalHarga = "Rp ${widget.data['total']?.toString() ?? '0'}";
+    String rawDate = widget.data['created_at'] ?? '';
+    String tanggal = '-';
+
+    if (rawDate.isNotEmpty) {
+      try {
+        DateTime parsedDate = DateTime.parse(rawDate);
+        tanggal = DateFormat('dd MMMM yyyy, HH:mm').format(parsedDate) + " WIB";
+      } catch (e) {
+        tanggal = widget.data['created_at_formatted'] ?? rawDate;
+      }
+    }
+
+    // Format Rupiah Akumulasi Grand Total
+    String grandTotal = "Rp " + widget.data['total'].toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+    );
+
     String catatan = widget.data['catatan'] ?? 'Disetor lewat aplikasi kurir';
     String nomorTransaksi = "TRX-${widget.data['id'] ?? '000'}";
+
+    // Ambil list detail item penimbangan multi-item
+    List<dynamic> details = widget.data['details'] ?? [];
 
     return Scaffold(
       backgroundColor: const Color(0xFFEEEEEE),
@@ -109,12 +121,11 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
           children: [
             const SizedBox(height: 10),
 
-            // ================= KERTAS STRUK DIGITAL (DI-SCREENSHOT) =================
+            // ================= KERTAS STRUK DIGITAL MULTI-ITEM (DI-SCREENSHOT) =================
             Screenshot(
               controller: _screenshotController,
               child: Container(
                 width: double.infinity,
-                // Menggunakan dekorasi warna solid agar saat dicapture latar belakangnya tidak transparan
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -156,7 +167,7 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
                         children: [
                           Center(
                             child: Text(
-                              totalHarga,
+                              grandTotal,
                               style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: primaryColor, letterSpacing: -0.5),
                             ),
                           ),
@@ -171,11 +182,70 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
                           const Divider(thickness: 1.5, color: Color(0xFFEEEEEE)),
                           const SizedBox(height: 16),
 
+                          // Metadata Transaksi Utama
                           _rowStruk(label: "Nama Nasabah", value: namaNasabah),
                           _rowStruk(label: "Waktu Setor", value: tanggal),
-                          _rowStruk(label: "Kategori Sampah", value: namaJenis),
-                          _rowStruk(label: "Berat Bersih", value: beratSampah, valueColor: Colors.orange.shade900),
-                          _rowStruk(label: "Harga per Kg", value: hargaPerKg),
+
+                          const SizedBox(height: 8),
+                          const Divider(thickness: 1.5, color: Color(0xFFEEEEEE)),
+                          const SizedBox(height: 14),
+
+                          // 📦 BARU: SECTION DAFTAR RINCIAN ITEM SAMPAH MULTI-ITEM
+                          const Text(
+                            "RINCIAN ITEM SAMPAH",
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: primaryColor, letterSpacing: 0.3),
+                          ),
+                          const SizedBox(height: 12),
+
+                          details.isEmpty
+                              ? _buildLegacyRowFallback(widget.data) // Jika data penimbangan lama single-item
+                              : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: details.length,
+                            itemBuilder: (context, index) {
+                              final item = details[index];
+                              String namaItem = item['jenis_sampah']?['nama'] ?? 'Jenis Sampah';
+                              String berat = "${item['berat']?.toString() ?? '0'} Kg";
+
+                              String hargaFormat = "Rp " + item['harga_per_kg'].toString().replaceAllMapped(
+                                  RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+                              );
+
+                              String subtotalFormat = "Rp " + item['subtotal'].toString().replaceAllMapped(
+                                  RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+                              );
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "• $namaItem",
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: darkTextColor),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "$berat x $hargaFormat",
+                                          style: const TextStyle(fontSize: 12, color: greyTextColor, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      subtotalFormat,
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: darkTextColor),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
                           const SizedBox(height: 12),
                           const Divider(thickness: 1.5, color: Color(0xFFEEEEEE)),
                           const SizedBox(height: 16),
@@ -202,7 +272,7 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
                       ),
                     ),
 
-                    // 🛠️ FIX LAYOUT ERROR: Mengamankan gerigi bawah agar tidak mengacaukan kalkulasi render screenshot
+                    // Gerigi Bawah Struk
                     Container(
                       height: 10,
                       width: double.infinity,
@@ -232,7 +302,7 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
 
             const SizedBox(height: 24),
 
-            // 🔥 TOMBOL DOWNLOAD STRUK KE GALERI HP
+            // TOMBOL DOWNLOAD STRUK KE GALERI HP
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -280,7 +350,7 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
 
   Widget _rowStruk({required String label, required String value, Color? valueColor}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -294,6 +364,39 @@ class _DetailRiwayatScreenState extends State<DetailRiwayatScreen> {
               style: TextStyle(fontSize: 14, color: valueColor ?? darkTextColor, fontWeight: FontWeight.w900),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // Fallback pengaman data single-item lama agar struk tidak jebol saat dibuka
+  Widget _buildLegacyRowFallback(Map<String, dynamic> data) {
+    String namaJenis = data['jenis_sampah']?['nama'] ?? 'Sampah Umum';
+    String berat = "${data['berat']?.toString() ?? '0'} Kg";
+
+    String hargaFormat = "Rp " + data['harga_per_kg'].toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+    );
+
+    String subtotalFormat = "Rp " + data['total'].toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("• $namaJenis", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: darkTextColor)),
+              const SizedBox(height: 2),
+              Text("$berat x $hargaFormat", style: const TextStyle(fontSize: 12, color: greyTextColor, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          Text(subtotalFormat, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: darkTextColor)),
         ],
       ),
     );
