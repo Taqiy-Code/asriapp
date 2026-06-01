@@ -6,6 +6,7 @@ import '../../config.dart';
 import '../services/jadwal_service.dart';
 import 'ScanBarcode.dart';
 import 'SetorSampahPage.dart';
+import 'navigasi_kurir_page.dart'; // 🔥 Pastikan import halaman navigasi sudah aktif
 
 // Palet warna kontras tinggi (Senior-Friendly Theme)
 const primaryColor = Color(0xFF1E521E);     // Hijau tua pekat
@@ -107,7 +108,7 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
       backgroundColor: backgroundColor,
       body: Column(
         children: [
-          // ================= HEADER FIXED (PERBAIKAN POSISI AMAN) =================
+          // ================= HEADER FIXED =================
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 50, bottom: 20),
@@ -150,7 +151,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // KODE BARU (OTOMATIS DI TENGAH PAS)
                   Center(
                     child: Text(
                       "Ada ${filteredList.length} tugas penjemputan aktif",
@@ -243,59 +243,60 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
                 : RefreshIndicator(
               color: primaryColor,
               onRefresh: getJadwal,
-              child: RefreshIndicator(
-                color: primaryColor,
-                onRefresh: getJadwal,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  itemCount: filteredList.length,
-                  itemBuilder: (context, index) {
-                    final item = filteredList[index];
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                itemCount: filteredList.length,
+                itemBuilder: (context, index) {
+                  final item = filteredList[index];
 
-                    // FIX JAM DARI TIMESTAMP DATABASE
-                    String jamFormatted = "--:--";
-                    if (item['created_at'] != null && item['created_at'].toString().length >= 16) {
-                      try {
-                        jamFormatted = item['created_at'].toString().substring(11, 16);
-                      } catch (e) {
-                        jamFormatted = "--:--";
-                      }
+                  String jamFormatted = "--:--";
+                  if (item['created_at'] != null && item['created_at'].toString().length >= 16) {
+                    try {
+                      jamFormatted = item['created_at'].toString().substring(11, 16);
+                    } catch (e) {
+                      jamFormatted = "--:--";
                     }
+                  }
 
-                    String displayStatus = (item['status'] ?? 'terjadwal').toString().toLowerCase();
-                    bool isTerjadwal = (displayStatus == 'terjadwal' || displayStatus == 'pending');
-                    bool isProses = (displayStatus == 'proses' || displayStatus == 'on_progress');
+                  String displayStatus = (item['status'] ?? 'terjadwal').toString().toLowerCase();
+                  bool isTerjadwal = (displayStatus == 'terjadwal' || displayStatus == 'pending');
+                  bool isProses = (displayStatus == 'proses' || displayStatus == 'on_progress');
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: JadwalCard(
-                        id: item['id'] ?? 0,
-                        nama: item['nasabah']?['name'] ?? 'Tanpa Nama',
-                        alamat: item['alamat'] ?? 'Alamat tidak tersedia',
-                        jam: jamFormatted,
-                        status: displayStatus,
-                        // Modifikasi fungsi tombol dinamis
-                        onMulaiJemput: () async {
-                          if (isTerjadwal) {
-                            // Jika masih terjadwal, jalankan fungsi update jadi proses
-                            mulaiJemputKurir(item['id']);
-                          } else if (isProses) {
-                            // 🔥 JALUR EMAS: Jika sudah dalam proses, klik tombol ini untuk langsung masuk timbang dengan ID JADWAL AKURAT!
-                            final refresh = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ScanBarcodePage(jadwalId: item['id']),
-                              ),
-                            );
-                            if (refresh == true) {
-                              getJadwal(); // Auto-refresh halaman agar status langsung berubah jadi SELESAI di tempat
-                            }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: JadwalCard(
+                      id: item['id'] ?? 0,
+                      nama: item['nasabah']?['name'] ?? 'Tanpa Nama',
+                      alamat: item['alamat'] ?? 'Alamat tidak tersedia',
+                      jam: jamFormatted,
+                      status: displayStatus,
+                      // 🔥 AKSI TOMBOL LIHAT LOKASI: Pindah ke halaman Navigasi rute map
+                      onLihatLokasi: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NavigasiKurirPage(),
+                          ),
+                        );
+                      },
+                      onMulaiJemput: () async {
+                        if (isTerjadwal) {
+                          mulaiJemputKurir(item['id']);
+                        } else if (isProses) {
+                          final refresh = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ScanBarcodePage(jadwalId: item['id']),
+                            ),
+                          );
+                          if (refresh == true) {
+                            getJadwal();
                           }
-                        },
-                      ),
-                    );
-                  },
-                ),
+                        }
+                      },
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -414,6 +415,7 @@ class JadwalCard extends StatelessWidget {
   final String alamat;
   final String jam;
   final String status;
+  final VoidCallback onLihatLokasi; // 🔥 Ditambahkan parameter baru
   final VoidCallback onMulaiJemput;
 
   const JadwalCard({
@@ -423,6 +425,7 @@ class JadwalCard extends StatelessWidget {
     required this.alamat,
     required this.jam,
     required this.status,
+    required this.onLihatLokasi, // 🔥 Ditambahkan ke constructor
     required this.onMulaiJemput,
   });
 
@@ -438,8 +441,6 @@ class JadwalCard extends StatelessWidget {
     } else {
       statusColor = Colors.orange.shade800;
     }
-
-    bool isTerjadwal = (displayStatus == 'terjadwal' || displayStatus == 'pending');
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -463,7 +464,7 @@ class JadwalCard extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, // 🔥 Di sini letak perbaikan typo sebelumnya
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       nama,
@@ -482,13 +483,6 @@ class JadwalCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    // Row(
-                    //   children: [
-                    //     const Icon(Icons.access_time_filled_rounded, size: 16, color: primaryColor),
-                    //     const SizedBox(width: 6),
-                    //     Expanded(child: Text(jam, style: const TextStyle(color: greyTextColor, fontSize: 13, fontWeight: FontWeight.w700))),
-                    //   ],
-                    // ),
                   ],
                 ),
               ),
@@ -511,7 +505,7 @@ class JadwalCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: onLihatLokasi, // 🔥 Sekarang memicu fungsi yang dioper dari list view
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 50),
                     side: const BorderSide(color: primaryColor, width: 1.5),
@@ -524,7 +518,7 @@ class JadwalCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: onMulaiJemput, // Selalu aktif jika status terjadwal atau proses
+                  onPressed: onMulaiJemput,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: status.toLowerCase() == 'proses' ? Colors.orange.shade800 : primaryColor,
                     disabledBackgroundColor: Colors.grey.shade200,

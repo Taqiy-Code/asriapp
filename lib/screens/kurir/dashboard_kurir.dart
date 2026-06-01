@@ -7,6 +7,7 @@ import '../kurir/JadwalJemputScreen.dart';
 import 'ProfilKurirScreen.dart';
 import 'RiwayatKurirScreen.dart';
 import 'ScanBarcode.dart';
+import 'navigasi_kurir_page.dart'; // Import halaman navigasi rute baru kita
 
 // Palet warna dengan kontras tinggi (Senior-Friendly Theme)
 const primaryColor = Color(0xFF1E521E);     // Hijau lebih tua agar tulisan lebih kontras dan jelas
@@ -39,6 +40,7 @@ class _DashboardKurirState extends State<DashboardKurir> {
     );
   }
 
+  // 🔥 DIUBAH: Mengembalikan Future agar bisa ditunggu oleh RefreshIndicator
   Future<void> getDashboard() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -116,60 +118,69 @@ class _DashboardKurirState extends State<DashboardKurir> {
       },
       child: Scaffold(
         backgroundColor: backgroundColor,
-        body: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              _HeaderSection(onLogout: logout),
+        // 🔥 FITUR UTAMA: Membungkus area scroll dengan RefreshIndicator senior-friendly
+        body: RefreshIndicator(
+          color: primaryColor,
+          backgroundColor: Colors.white,
+          strokeWidth: 3,
+          onRefresh: getDashboard, // Menjalankan ulang fungsi penarikan data dari database Laravel
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(), // Diubah ke AlwaysScrollable agar list kosong tetap bisa ditarik
+            ),
+            child: Column(
+              children: [
+                _HeaderSection(onLogout: logout),
 
-              Transform.translate(
-                offset: const Offset(0, -25),
-                child: Padding(
+                Transform.translate(
+                  offset: const Offset(0, -25),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _ActiveMissionCard(dashboardData: dashboardData),
+                  ),
+                ),
+
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _ActiveMissionCard(dashboardData: dashboardData),
-                ),
-              ),
+                  child: Column(
+                    children: [
+                      _sectionTitle("Ringkasan Hari Ini"),
+                      const SizedBox(height: 12),
+                      _TodaySummarySection(dashboardData: dashboardData),
+                      const SizedBox(height: 32),
+                      _sectionTitle("Menu Akses Cepat"),
+                      const SizedBox(height: 12),
+                      const _QuickActionsRow(),
+                      const SizedBox(height: 32),
+                      _sectionTitle("Catatan Performa"),
+                      const SizedBox(height: 12),
+                      _InsightCard(dashboardData: dashboardData),
+                      const SizedBox(height: 32),
+                      _sectionTitle("Riwayat Setor Terakhir"),
+                      const SizedBox(height: 12),
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _sectionTitle("Ringkasan Hari Ini"),
-                    const SizedBox(height: 12),
-                    _TodaySummarySection(dashboardData: dashboardData),
-                    const SizedBox(height: 32),
-                    _sectionTitle("Menu Akses Cepat"),
-                    const SizedBox(height: 12),
-                    const _QuickActionsRow(),
-                    const SizedBox(height: 32),
-                    _sectionTitle("Catatan Performa"),
-                    const SizedBox(height: 12),
-                    _InsightCard(dashboardData: dashboardData),
-                    const SizedBox(height: 32),
-                    _sectionTitle("Riwayat Setor Terakhir"),
-                    const SizedBox(height: 12),
-
-                    aktivitasTerbaru.isEmpty
-                        ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
-                      decoration: cardDecoration(),
-                      child: const Center(
-                        child: Text(
-                          "Belum ada catatan setoran untuk hari ini",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: greyTextColor, fontSize: 15, fontWeight: FontWeight.bold),
+                      aktivitasTerbaru.isEmpty
+                          ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+                        decoration: cardDecoration(),
+                        child: const Center(
+                          child: Text(
+                            "Belum ada catatan setoran untuk hari ini\n(Tarik ke bawah untuk menyegarkan data)",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: greyTextColor, fontSize: 14, fontWeight: FontWeight.bold, height: 1.4),
+                          ),
                         ),
+                      )
+                          : Column(
+                        children: aktivitasTerbaru.map((item) => _ActivityCard(data: item)).toList(),
                       ),
-                    )
-                        : Column(
-                      children: aktivitasTerbaru.map((item) => _ActivityCard(data: item)).toList(),
-                    ),
-                    const SizedBox(height: 140),
-                  ],
+                      const SizedBox(height: 140),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -304,12 +315,26 @@ class _QuickActionsRow extends StatelessWidget {
             }
           },
         ),
-        const _MiniActionCard(icon: Icons.map_rounded, title: "Peta Lokasi"),
+
+        // 🔥 INTEGRASI REFRESH: Otomatis menyegarkan data dashboard setelah kembali dari rute navigasi peta
+        _MiniActionCard(
+          icon: Icons.map_rounded,
+          title: "Peta Rute",
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NavigasiKurirPage()),
+            );
+            if (result == true) {
+              final state = context.findAncestorStateOfType<_DashboardKurirState>();
+              state?.getDashboard();
+            }
+          },
+        ),
         const _MiniActionCard(icon: Icons.bar_chart_rounded, title: "Lihat Data"),
 
-        // 🔥 SEKARANG SAMA: Ikon disamakan dengan Navbar bawah & Fitur langsung Aktif
         _MiniActionCard(
-          icon: Icons.assignment_turned_in_rounded, // Samakan dengan navbar bawah
+          icon: Icons.assignment_turned_in_rounded,
           title: "Riwayat",
           onTap: () {
             Navigator.push(
@@ -383,7 +408,6 @@ class _PremiumBottomNav extends StatelessWidget {
               icon: Icons.assignment_turned_in_rounded,
               label: "Riwayat",
               onTap: () {
-                // 🔥 Buka halaman riwayat saat menu navigasi diklik
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const RiwayatKurirScreen()),
@@ -440,7 +464,6 @@ class _ScanFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 PENGAMAN SCANNER: Jika tidak ada jadwal harian (id == 0), scanner dinonaktifkan
     bool tidakAdaJadwal = (jadwalId == 0);
 
     return Container(
@@ -616,13 +639,30 @@ class _ActiveMissionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _activeBadge(context), // Mengirim context untuk mengecek data state
+              _activeBadge(context),
             ],
           ),
           const SizedBox(height: 24),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text("Jadwal Jalan Hari Ini", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: darkTextColor)),
+
+          // 🔥 INTEGRASI REFRESH: Ketukan pada judul rute juga otomatis menangkap sinyal kembali untuk disegarkan
+          GestureDetector(
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NavigasiKurirPage()),
+              );
+              if (result == true) {
+                final state = context.findAncestorStateOfType<_DashboardKurirState>();
+                state?.getDashboard();
+              }
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text("Jadwal Jalan Hari Ini", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: darkTextColor)),
+                Icon(Icons.arrow_forward_ios_rounded, size: 16, color: primaryColor),
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Align(
@@ -644,7 +684,7 @@ class _ActiveMissionCard extends StatelessWidget {
             children: [
               Text("$progressPercent% Selesai", style: const TextStyle(fontWeight: FontWeight.w900, color: darkTextColor, fontSize: 15)),
               const Spacer(),
-              _startButton(context), // Tombol Mulai Dinamis Terintegrasi
+              _startButton(context),
             ],
           ),
         ],
@@ -652,7 +692,6 @@ class _ActiveMissionCard extends StatelessWidget {
     );
   }
 
-  // 🔥 UPDATE BADGE STATUS: Menyesuaikan status teks di pojok kanan kartu
   static Widget _activeBadge(BuildContext context) {
     final state = context.findAncestorStateOfType<_DashboardKurirState>();
     int idJadwal = state?.dashboardData?['jadwal']?['id'] ?? 0;
@@ -671,7 +710,6 @@ class _ActiveMissionCard extends StatelessWidget {
     );
   }
 
-  // 🔥 UPDATE TOMBOL DINAMIS: Otomatis terkunci (disabled) jika jadwal harian kosong (null)
   static Widget _startButton(BuildContext context) {
     final state = context.findAncestorStateOfType<_DashboardKurirState>();
     int idJadwal = state?.dashboardData?['jadwal']?['id'] ?? 0;
@@ -679,7 +717,7 @@ class _ActiveMissionCard extends StatelessWidget {
 
     return ElevatedButton.icon(
       onPressed: tidakAdaTugas
-          ? null // Nilai null otomatis me-nonaktifkan tombol (disabled state bawaan Flutter)
+          ? null
           : () async {
         final result = await Navigator.push(
           context,

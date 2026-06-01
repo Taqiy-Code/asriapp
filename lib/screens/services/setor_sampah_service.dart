@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:asriapp/config.dart';
-import '../models/setor_sampah_model.dart';
 
 class SetorSampahService {
   // ================= 1. CREATE REQUEST PENJEMPUTAN (NASABAH) =================
@@ -17,9 +16,6 @@ class SetorSampahService {
       }).toList();
 
       final url = Uri.parse('${AppConfig.baseUrl}/request-penjemputan');
-
-      print('POST REQUEST : $url');
-
       final response = await http.post(
         url,
         headers: {
@@ -32,70 +28,55 @@ class SetorSampahService {
           "items": items,
         }),
       );
-
-      print('POST STATUS : ${response.statusCode}');
-      print('POST BODY : ${response.body}');
-
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('POST ERROR : $e');
       return false;
     }
   }
 
-  // ================= 2. READ RIWAYAT TRANSAKSI (NASABAH) =================
-  static Future<List<SetorSampahModel>> getRiwayat() async {
+  // ================= 2. READ RIWAYAT TRANSAKSI (NASABAH) - FIXED =================
+  static Future<List<dynamic>> getRiwayat({required int userId}) async {
     try {
-      final url = Uri.parse('${AppConfig.baseUrl}/setor-sampah');
-      print('GET REQUEST : $url');
+      final url = Uri.parse('${AppConfig.baseUrl}/dashboard-nasabah/$userId');
+      print('GET REQUEST RIWAYAT VIA: $url');
 
       final response = await http.get(
         url,
-        headers: {
-          "Accept": "application/json",
-        },
+        headers: {"Accept": "application/json"},
       );
 
-      print('GET STATUS : ${response.statusCode}');
-      print('GET BODY : ${response.body}');
+      print('GET STATUS RIWAYAT : ${response.statusCode}');
+      print('GET BODY RIWAYAT : ${response.body}');
 
-      final body = jsonDecode(response.body);
-      List data = body['data'];
-
-      return data.map((item) => SetorSampahModel.fromJson(item)).toList();
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true && body['riwayat_mutasi'] != null) {
+          return body['riwayat_mutasi'] as List<dynamic>;
+        }
+      }
+      return [];
     } catch (e) {
-      print('GET ERROR : $e');
+      print('GET ERROR RIWAYAT : $e');
       return [];
     }
   }
 
-  // ================= 3. 🔥 BARU: AUTOLOAD MANIFES REQUEST (UNTUK KURIR) =================
-  /// Fungsi ini dipanggil di HP Kurir saat membuka form timbang berdasarkan request nasabah.
-  /// Berfungsi mengembalikan list item sampah kosong beserta harga terbarunya dari DB.
+  // ================= 3. AUTOLOAD MANIFES REQUEST (UNTUK KURIR) =================
   static Future<Map<String, dynamic>?> getRequestDetail(int nasabahId) async {
     try {
       final url = Uri.parse('${AppConfig.baseUrl}/request-detail/$nasabahId');
-      print('GET REQUEST DETAIL : $url');
-
       final response = await http.get(
         url,
-        headers: {
-          "Accept": "application/json",
-        },
+        headers: {"Accept": "application/json"},
       );
-
-      print('GET DETAIL STATUS : ${response.statusCode}');
-      print('GET DETAIL BODY : ${response.body}');
-
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) {
-          return body; // Mengembalikan data 'setor_sampah_id' dan 'items' array
+          return body;
         }
       }
       return null;
     } catch (e) {
-      print('GET DETAIL ERROR : $e');
       return null;
     }
   }

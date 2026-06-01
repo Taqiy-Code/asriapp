@@ -197,7 +197,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
 
     // B. JALUR MANDIRI: Kurir menambah item murni dari nol lewat dropdown biasa
     if (selectedJenisSampah == null) {
-      tampilkanPesan("❌ Pilih kategori jenis sampah terlebih dahulu!", Colors.red.shade800);
+      tampilkanPesan(" Pilih kategori jenis sampah terlebih dahulu!", Colors.red.shade800);
       return;
     }
 

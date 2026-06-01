@@ -4,13 +4,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../../config.dart'; // Menghubungkan aman dengan AppConfig Mai
-import 'activity_riwayat.dart';
+import '../../config.dart';
+import 'activity_riwayat.dart'; // File riwayat transaksi milikmu
 import 'profile.dart';
 import 'setor_sampah.dart';
 import 'tarik_tunai.dart';
 
-// 🔥 SINKRONISASI PALET WARNA PRESTISIUS HALAMAN KURIR (Senior-Friendly Theme)
 const primaryColor = Color(0xFF1E521E);
 const secondaryColor = Color(0xFF4CAF50);
 const softGreenColor = Color(0xFFE8F5E9);
@@ -33,11 +32,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // --- STATE VARIABEL REAL-TIME ---
   int saldoNasabah = 0;
   List<dynamic> mutasiList = [];
   bool isLoading = true;
-  double totalBeratBulanIni = 0.0; // 🔥 Variabel penampung Kg sampah
+  double totalBeratBulanIni = 0.0;
 
   @override
   void initState() {
@@ -45,13 +43,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     fetchDashboardData();
   }
 
-  // ========================================================
-  // ⚡ AMBIL DATA SALDO & MUTASI LANGSUNG DARI LARAVEL
-  // ========================================================
   Future<void> fetchDashboardData() async {
     try {
+      setState(() { isLoading = true; });
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      int userId = prefs.getInt('user_id') ?? 0;
+
+      // 🔥 JALUR AMAN: Deteksi multi-type user_id agar kebal error parsing
+      int userId = 0;
+      if (prefs.containsKey('user_id')) {
+        final rawId = prefs.get('user_id');
+        if (rawId is int) {
+          userId = rawId;
+        } else if (rawId is String) {
+          userId = int.tryParse(rawId) ?? 0;
+        }
+      }
+
+      print("DEBUG MAI NASABAH - Menembak Dashboard ID: $userId");
+
+      if (userId == 0) {
+        setState(() { isLoading = false; });
+        return;
+      }
 
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/dashboard-nasabah/$userId'),
@@ -62,20 +75,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (data['success'] == true) {
           setState(() {
-            // 1. Ambil data saldo ter-update
-            saldoNasabah = int.tryParse(data['nasabah']['saldo'].toString()) ?? 0;
+            var nasabahObj = data['nasabah'] ?? data['user'] ?? data;
 
-            // 2. Ambil list mutasi saldo
+            saldoNasabah = int.tryParse(nasabahObj['saldo'].toString()) ?? 0;
             mutasiList = data['riwayat_mutasi'] ?? [];
-
-            // 3. 🔥 FIX BARU: Ambil total berat kilogram sampah khusus bulan ini dari backend
-            totalBeratBulanIni = double.tryParse(data['nasabah']['total_berat_kg'].toString()) ?? 0.0;
+            totalBeratBulanIni = double.tryParse(nasabahObj['total_berat_kg'].toString()) ?? 0.0;
 
             isLoading = false;
           });
         }
       } else {
-        print("Gagal memuat API Dashboard. Status: ${response.statusCode}");
         setState(() { isLoading = false; });
       }
     } catch (e) {
@@ -107,7 +116,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return keluar ?? false;
   }
 
-  // Formatter Rupiah Lokalan Basayan Bestari
   String formatRupiah(int angka) {
     return "Rp " + angka.toString().replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
@@ -152,7 +160,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -178,7 +185,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
-
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
@@ -226,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ================= KANTONG RINGKASAN SALDO REAL-TIME =================
+                  // ================= RINGKASAN SALDO & BERAT =================
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
@@ -253,7 +259,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             borderRadius: BorderRadius.circular(24),
                             child: Row(
                               children: [
-                                // KIRI: TAMPILAN SALDO UTUHAN DARI API LARAVEL
                                 Expanded(
                                   child: Container(
                                     color: Colors.white,
@@ -272,8 +277,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ),
                                   ),
                                 ),
-
-                                // KANAN: 🔥 UPDATE SINKRON TOTAL BERAT SAMPAH BULAN INI
                                 Expanded(
                                   child: Container(
                                     color: softGreenColor,
@@ -283,11 +286,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         const Icon(Icons.scale_rounded, color: primaryColor, size: 30),
                                         const SizedBox(height: 6),
                                         Text(
-                                          "$totalBeratBulanIni Kg", // 🔥 Menampilkan berat asli bulan berjalan dari DB
+                                          "$totalBeratBulanIni Kg",
                                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: primaryColor),
                                         ),
                                         const SizedBox(height: 4),
-                                        const Text("Sampah Bulan Ini", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w700)),
+                                        const Text("Total Sampah", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w700)),
                                       ],
                                     ),
                                   ),
@@ -302,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 28),
 
-                  // ================= UTILITY MENU ITEM =================
+                  // ================= MENU UTAMA =================
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
@@ -313,18 +316,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            // 🔥 FIX SINKRONISASI ROUTE: Menembak halaman riwayatmu yang asli
                             _menuItem(Icons.receipt_long_rounded, "Riwayat\nTransaksi", () {
                               Navigator.push(context, MaterialPageRoute(builder: (context) => const RiwayatPage()));
                             }),
                             _menuItem(Icons.delete_sweep_rounded, "Setor\nSampah", () {
                               Navigator.push(context, MaterialPageRoute(builder: (context) => const SetorSampahScreen()));
                             }),
-
-                            // ✅ KEMBALI KE IKON LAMA (Koin Finansial Pilihan Mai)
                             _menuItem(Icons.monetization_on_rounded, "Tarik\nTunai", () {
                               Navigator.push(context, MaterialPageRoute(builder: (context) => const TarikTunaiPage()));
                             }),
-
                             _menuItem(Icons.support_agent_rounded, "Bantuan", () {}),
                           ],
                         )
@@ -334,7 +335,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 28),
 
-                  // ================= LIST MUTASI SALDO REAL-TIME (BAWAH) =================
+                  // ================= LIST MUTASI SALDO =================
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
@@ -359,11 +360,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           itemCount: mutasiList.length > 5 ? 5 : mutasiList.length,
                           itemBuilder: (context, index) {
                             final item = mutasiList[index];
-                            bool isUangMasuk = item['jenis_transaksi'] == 'masuk';
+
+                            String jenisTx = (item['jenis_transaksi'] ?? 'masuk').toString().toLowerCase();
+                            bool isUangMasuk = jenisTx == 'masuk';
+
                             int nominal = int.tryParse(item['nominal'].toString()) ?? 0;
+                            String judulKartu = item['judul_dinamis'] ?? (isUangMasuk ? "Uang Masuk (Setor Sampah)" : "Uang Keluar (Tarik Tunai)");
 
                             return _historyItem(
-                              isUangMasuk ? "Uang Masuk (Setor Sampah)" : "Uang Keluar (Tarik Tunai)",
+                              judulKartu,
                               item['tanggal_formatted'] ?? '-',
                               "${isUangMasuk ? '+' : '-'} ${formatRupiah(nominal)}",
                               isUangMasuk ? Colors.green.shade800 : Colors.red.shade800,
@@ -460,8 +465,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const RiwayatPage()));
         } else if (index == 2) {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const SetorSampahScreen()));
-        } else if (index == 3) {
-          // Notifikasi
         } else if (index == 4) {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const profile_page()));
         }
