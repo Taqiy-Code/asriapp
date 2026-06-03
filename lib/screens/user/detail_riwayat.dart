@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-// Palet warna resmi Basayan Bestari agar sinkron dengan beranda
 const primaryColor = Color(0xFF1E521E);
 const secondaryColor = Color(0xFF4CAF50);
 const softGreenColor = Color(0xFFE8F5E9);
@@ -9,7 +9,6 @@ const darkTextColor = Color(0xFF0D240D);
 const greyTextColor = Color(0xFF555555);
 
 class DetailRiwayatPage extends StatelessWidget {
-  // 🔥 KUNCI UTAMA: Ubah parameter menjadi dynamic agar bisa menerima data JSON mentah langsung dari RiwayatPage
   final dynamic data;
 
   const DetailRiwayatPage({
@@ -17,13 +16,10 @@ class DetailRiwayatPage extends StatelessWidget {
     required this.data,
   });
 
-  // Formatter Rupiah Mandiri
   String formatDuitRupiah(dynamic nominalRaw) {
     try {
       int angka = int.parse(nominalRaw.toString().replaceAll(RegExp(r'[^0-9]'), ''));
-      return "Rp " + angka.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.'
-      );
+      return "Rp " + NumberFormat.decimalPattern('id').format(angka);
     } catch (e) {
       return "Rp $nominalRaw";
     }
@@ -31,178 +27,161 @@ class DetailRiwayatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 📡 Deteksi otomatis apakah ini transaksi Setor Sampah atau Tarik Tunai Dana
     String jenisTx = (data['jenis_transaksi'] ?? 'masuk').toString().toLowerCase();
     bool isPenarikan = jenisTx.contains('keluar') || jenisTx.contains('tarik');
 
-    // Ekstraksi Variabel dengan Null-Safety Ketat
-    String judulStruk = isPenarikan ? "Struk Tarik Tunai" : "Struk Setor Sampah";
+    String judulHalaman = isPenarikan ? "Bukti Tarik Tunai" : "Bukti Setoran Sampah";
     String tanggal = (data['tanggal_formatted'] ?? '-').toString();
-    String status = (data['status'] ?? 'SUKSES').toString().toUpperCase();
     String nominalUang = formatDuitRupiah(data['nominal'] ?? '0');
     String catatan = (data['catatan'] ?? '-').toString();
-    String kategoriJudul = (data['judul_dinamis'] ?? (isPenarikan ? 'Tarik Tunai' : 'Setor Sampah')).toString();
-    String beratTotal = "${data['total_berat'] ?? '0'} Kg";
-
-    Color temaWarnaStruk = isPenarikan ? Colors.red.shade800 : primaryColor;
+    String trxId = "TRX-${data['id'] ?? '0'}";
+    String namaNasabah = (data['user_name'] ?? 'Nasabah').toString();
+    String namaKurir = (data['nama_kurir'] ?? 'Kurir ASRI').toString();
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      body: SafeArea(
-        top: false,
+      backgroundColor: const Color(0xFFF2F2F2),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: primaryColor,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
+        ),
+        title: Text(
+          judulHalaman,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
         child: Column(
           children: [
-            // ================= PREMIUM HEADER CUSTOM =================
+            // ================= RECEIPT CARD =================
             Container(
-              height: 120,
-              decoration: const BoxDecoration(
-                color: primaryColor,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(36),
-                  bottomRight: Radius.circular(36),
-                ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  )
+                ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
-                    ),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          "Detail Transaksi",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 48), // Penyeimbang tombol back kiri
-                  ],
-                ),
-              ),
-            ),
-
-            // ================= NOTA / STRUK DETAIL (ANTI CRASH) =================
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 0.88,
-                    margin: const EdgeInsets.symmetric(vertical: 24),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        )
-                      ],
-                      border: Border.all(
-                        color: temaWarnaStruk.withOpacity(0.15),
-                        width: 1.5,
+              child: Column(
+                children: [
+                  // Green Header Section inside card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: const BoxDecoration(
+                      color: primaryColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(30),
+                        topRight: Radius.circular(30),
                       ),
                     ),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: isPenarikan ? Colors.red.shade50 : softGreenColor,
-                          child: Icon(
-                            isPenarikan ? Icons.payments_rounded : Icons.receipt_long_rounded,
-                            color: temaWarnaStruk,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          "BASAYAN BESTARI",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            color: temaWarnaStruk,
-                            letterSpacing: 0.5,
-                          ),
+                        const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 48),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "TRANSAKSI BERHASIL",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.2),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          judulStruk,
-                          style: const TextStyle(fontSize: 13, color: greyTextColor, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(thickness: 1, height: 1),
-                        const SizedBox(height: 16),
-
-                        // Badge Kategori Dinamis (Plastik, Kertas, atau Tarik Tunai)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: temaWarnaStruk.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            kategoriJudul,
-                            style: TextStyle(
-                              color: temaWarnaStruk,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Detail baris demi baris informasi mutasi
-                        _buildRowDetail("Waktu Transaksi", tanggal),
-                        const SizedBox(height: 10),
-                        _buildRowDetail("Status", status == 'MASUK' || status == 'KELUAR' ? 'SUKSES' : status, isStatus: true, statusColor: temaWarnaStruk),
-
-                        // Tampilkan info berat timbangan HANYA jika transaksi berupa setor sampah
-                        if (!isPenarikan) ...[
-                          const SizedBox(height: 10),
-                          _buildRowDetail("Total Timbangan", beratTotal),
-                        ],
-
-                        const SizedBox(height: 10),
-                        _buildRowDetail("Catatan", catatan),
-
-                        const SizedBox(height: 16),
-                        const Divider(thickness: 1, height: 1),
-                        const SizedBox(height: 16),
-
-                        // Total Uang Tabungan Masuk / Keluar
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Jumlah Nominal",
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: darkTextColor),
-                            ),
-                            Text(
-                              nominalUang,
-                              style: TextStyle(
-                                color: temaWarnaStruk,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 18,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          "Bank Sampah Basayan Bestari",
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
-                ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Text(
+                          nominalUang,
+                          style: const TextStyle(color: primaryColor, fontWeight: FontWeight.w900, fontSize: 32),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          trxId,
+                          style: const TextStyle(color: greyTextColor, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(thickness: 1, color: Color(0xFFEEEEEE)),
+                        const SizedBox(height: 24),
+
+                        _buildInfoRow("Nama Nasabah", namaNasabah),
+                        const SizedBox(height: 12),
+                        _buildInfoRow("Waktu Setor", tanggal),
+                        const SizedBox(height: 12),
+                        _buildInfoRow("Nama Kurir", namaKurir),
+
+                        if (!isPenarikan) ...[
+                          const SizedBox(height: 32),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "RINCIAN ITEM SAMPAH",
+                              style: TextStyle(color: primaryColor, fontWeight: FontWeight.w900, fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildItemsList(),
+                        ],
+
+                        const SizedBox(height: 32),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Catatan Timbangan:",
+                            style: TextStyle(color: darkTextColor, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FBF9),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFEEEEEE)),
+                          ),
+                          child: Text(
+                            catatan,
+                            style: const TextStyle(color: greyTextColor, fontSize: 13, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Jagged bottom effect (Simulated with a row of circles)
+                  Row(
+                    children: List.generate(
+                      15,
+                      (index) => Expanded(
+                        child: Container(
+                          height: 10,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF2F2F2),
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(10),
+                              topRight: Radius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                ],
               ),
             ),
           ],
@@ -211,26 +190,69 @@ class DetailRiwayatPage extends StatelessWidget {
     );
   }
 
-  Widget _buildRowDetail(String label, String value, {bool isStatus = false, Color? statusColor}) {
+  Widget _buildInfoRow(String label, String value) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: greyTextColor, fontWeight: FontWeight.w600),
+          style: const TextStyle(color: greyTextColor, fontSize: 13, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: TextStyle(
-              fontSize: 13,
-              color: isStatus ? (statusColor ?? primaryColor) : darkTextColor,
-              fontWeight: isStatus ? FontWeight.w900 : FontWeight.w700,
+        Text(
+          value,
+          style: const TextStyle(color: darkTextColor, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemsList() {
+    List<dynamic> details = data['details'] ?? [];
+
+    if (details.isEmpty) {
+      // Fallback jika tidak ada data detail spesifik, tampilkan ringkasan
+      return _buildItemRow(
+          data['judul_dinamis'] ?? 'Setor Sampah',
+          "${data['total_berat'] ?? '0'} Kg",
+          formatDuitRupiah(data['nominal'] ?? '0')
+      );
+    }
+
+    return Column(
+      children: details.map((item) {
+        String nama = (item['jenis_sampah']?['nama'] ?? item['nama'] ?? 'Sampah').toString();
+        String berat = "${item['berat'] ?? '0'} Kg";
+        String harga = formatDuitRupiah(item['total'] ?? (double.tryParse(item['berat'].toString()) ?? 0) * (double.tryParse(item['jenis_sampah']?['harga_per_kg'].toString() ?? '0') ?? 0));
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildItemRow(nama, berat, harga),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildItemRow(String title, String subtitle, String price) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "• $title",
+              style: const TextStyle(color: darkTextColor, fontWeight: FontWeight.bold, fontSize: 14),
             ),
-          ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(color: greyTextColor, fontSize: 12),
+            ),
+          ],
+        ),
+        Text(
+          price,
+          style: const TextStyle(color: darkTextColor, fontWeight: FontWeight.bold, fontSize: 14),
         ),
       ],
     );

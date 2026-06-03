@@ -15,12 +15,10 @@ class JenisSampah {
 
   factory JenisSampah.fromJson(Map<String, dynamic> json) {
     return JenisSampah(
-      id: json['id'],
-      nama: json['nama'],
-      kodeIcon: json['kode_icon'],
-      harga: double.parse(
-        json['harga_per_kg'].toString(),
-      ),
+      id: json['id'] ?? 0,
+      nama: json['nama'] ?? json['nama_jenis'] ?? '-',
+      kodeIcon: json['kode_icon'] ?? '',
+      harga: double.tryParse(json['harga_per_kg']?.toString() ?? '0') ?? 0.0,
     );
   }
 }
