@@ -82,9 +82,18 @@ class _TarikTunaiPageState extends State<TarikTunaiPage> {
     });
   }
 
+  String _selectedMethod = "DANA";
+  final List<String> _methods = ["DANA", "OVO", "GOPAY", "PULSA"];
+  final TextEditingController _phoneController = TextEditingController();
+
   Future<void> _prosesTarikTunai() async {
     if (_nominal <= 0) {
       _showPesan("Silakan masukkan nominal penarikan.", Colors.red);
+      return;
+    }
+
+    if (_phoneController.text.length < 10) {
+      _showPesan("Silakan masukkan nomor HP yang valid.", Colors.red);
       return;
     }
 
@@ -122,6 +131,8 @@ class _TarikTunaiPageState extends State<TarikTunaiPage> {
       final result = await SetorSampahService.tarikTunai(
         userId: _userId,
         nominal: _nominal,
+        metode: _selectedMethod,
+        nomorHp: _phoneController.text,
       );
 
 
@@ -129,13 +140,17 @@ class _TarikTunaiPageState extends State<TarikTunaiPage> {
 
       if (result['status'] == 200) {
         if (mounted) {
-          // Navigasi ke halaman struk sukses
+          // Gunakan ID asli dari database
+          String realId = result['data']['transaction_id'] ?? "TRX-${DateTime.now().millisecondsSinceEpoch}";
+          
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => SuccessWithdrawalPage(
                 nominal: _nominal,
-                transactionId: "TRX-${DateTime.now().millisecondsSinceEpoch}",
+                transactionId: realId,
+                method: _selectedMethod,
+                phone: _phoneController.text,
               ),
             ),
           );
@@ -213,6 +228,38 @@ class _TarikTunaiPageState extends State<TarikTunaiPage> {
                           style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
                         ),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+                  const Text("Metode Penarikan", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: darkTextColor)),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedMethod,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    items: _methods.map((method) => DropdownMenuItem(value: method, child: Text(method))).toList(),
+                    onChanged: (val) => setState(() => _selectedMethod = val!),
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text("Nomor HP Tujuan", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: darkTextColor)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      hintText: "08xxxxxxxxxx",
+                      prefixIcon: const Icon(Icons.phone_android_rounded, color: primaryColor),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: primaryColor, width: 2)),
                     ),
                   ),
 

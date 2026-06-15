@@ -13,11 +13,15 @@ const greyTextColor = Color(0xFF555555);
 class SuccessWithdrawalPage extends StatefulWidget {
   final int nominal;
   final String transactionId;
+  final String method;
+  final String phone;
 
   const SuccessWithdrawalPage({
     super.key,
     required this.nominal,
     required this.transactionId,
+    this.method = "DANA",
+    this.phone = "",
   });
 
   @override
@@ -149,7 +153,8 @@ class _SuccessWithdrawalPageState extends State<SuccessWithdrawalPage> {
 
                                 _buildDetailRow("ID Transaksi", widget.transactionId),
                                 _buildDetailRow("Waktu", waktuSekarang),
-                                _buildDetailRow("Metode", "Saldo Tabungan ASRI"),
+                                _buildDetailRow("Metode", widget.method),
+                                _buildDetailRow("Nomor HP", widget.phone),
                                 _buildDetailRow("Status", "BERHASIL", isStatus: true),
 
                                 const SizedBox(height: 40),

@@ -9,6 +9,7 @@ import 'activity_riwayat.dart'; // File riwayat transaksi milikmu
 import 'profile.dart';
 import 'setor_sampah.dart';
 import 'tarik_tunai.dart';
+import 'aduan_page.dart';
 
 const primaryColor = Color(0xFF1E521E);
 const secondaryColor = Color(0xFF4CAF50);
@@ -329,7 +330,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fetchDashboardData();
                               }
                             }),
-                            _menuItem(Icons.support_agent_rounded, "Bantuan", () {}),
+                            _menuItem(Icons.support_agent_rounded, "Layanan\nAduan", () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const AduanPage()));
+                            }),
                           ],
                         )
                       ],

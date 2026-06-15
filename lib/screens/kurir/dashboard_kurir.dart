@@ -7,7 +7,8 @@ import '../kurir/JadwalJemputScreen.dart';
 import 'ProfilKurirScreen.dart';
 import 'RiwayatKurirScreen.dart';
 import 'ScanBarcode.dart';
-import 'navigasi_kurir_page.dart'; // Import halaman navigasi rute baru kita
+import 'navigasi_kurir_page.dart';
+import '../user/aduan_page.dart';
 
 // Palet warna dengan kontras tinggi (Senior-Friendly Theme)
 const primaryColor = Color(0xFF1E521E);     // Hijau lebih tua agar tulisan lebih kontras dan jelas
@@ -307,8 +308,13 @@ class _QuickActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 4,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 12,
+      childAspectRatio: 0.8,
       children: [
         _MiniActionCard(
           icon: Icons.assignment_rounded,
@@ -352,6 +358,16 @@ class _QuickActionsRow extends StatelessWidget {
             );
           },
         ),
+        _MiniActionCard(
+          icon: Icons.support_agent_rounded,
+          title: "Aduan",
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AduanPage()),
+            );
+          },
+        ),
       ],
     );
   }
@@ -369,25 +385,23 @@ class _MiniActionCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 82,
-        height: 98,
         decoration: cardDecoration(),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: primaryColor.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 24, color: primaryColor),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: darkTextColor)
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: darkTextColor)
             ),
           ],
         ),

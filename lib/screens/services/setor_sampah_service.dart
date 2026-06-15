@@ -128,6 +128,8 @@ class SetorSampahService {
   static Future<Map<String, dynamic>> tarikTunai({
     required int userId,
     required int nominal,
+    required String metode,
+    required String nomorHp,
   }) async {
     try {
       final url = Uri.parse('${AppConfig.baseUrl}/tarik-tunai');
@@ -140,6 +142,8 @@ class SetorSampahService {
         body: jsonEncode({
           "user_id": userId,
           "nominal": nominal,
+          "metode": metode,
+          "nomor_hp": nomorHp,
         }),
       );
 
