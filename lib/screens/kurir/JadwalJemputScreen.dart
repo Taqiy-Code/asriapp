@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config.dart';
@@ -7,11 +6,10 @@ import '../services/jadwal_service.dart';
 import 'ScanBarcode.dart';
 import 'navigasi_kurir_page.dart';
 
-// Palet Kontras Tinggi & Senior-Friendly
 const primaryColor = Color(0xFF1E521E);
 const backgroundColor = Color(0xFFF9FBF9);
 const darkTextColor = Color(0xFF0D240D);
-const greyTextColor = Color(0xFF444444); // Dibuat lebih gelap dari sebelumnya agar kontras
+const greyTextColor = Color(0xFF444444);
 const softGreenColor = Color(0xFFE8F5E9);
 
 class JadwalJemputScreen extends StatefulWidget {
@@ -41,8 +39,11 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
 
       int userId = 0;
       var rawId = prefs.get('user_id');
-      if (rawId is int) userId = rawId;
-      else if (rawId is String) userId = int.tryParse(rawId) ?? 0;
+      if (rawId is int) {
+        userId = rawId;
+      } else if (rawId is String) {
+        userId = int.tryParse(rawId) ?? 0;
+      }
 
       if (userId == 0) {
         setState(() => isLoading = false);
@@ -64,20 +65,11 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
 
   Future<void> mulaiJemputKurir(int jadwalId) async {
     try {
-      setState(() => isLoading = true); // Beri feedback loading ke pengguna senior agar tahu aplikasi sedang bekerja
+      setState(() => isLoading = true);
 
-      final url = Uri.parse('${AppConfig.baseUrl}/kurir/jadwal/$jadwalId/mulai');
-      debugPrint("MENCOBA MULAI JEMPUT UTAMA: $url");
+      final result = await JadwalService.mulaiJemput(jadwalId);
 
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      );
-
-      debugPrint("RESPONS UTAMA - STATUS CODE: ${response.statusCode}");
-      debugPrint("RESPONS UTAMA - BODY: ${response.body}");
-
-      if (response.statusCode == 200) {
+      if (result['success'] == true) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -88,36 +80,15 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         );
         await getJadwal();
       } else {
-        // Jika route utama gagal (bukan 200), jalankan fallback dengan deteksi log yang ketat
-        final fallbackUrl = Uri.parse('${AppConfig.baseUrl}/jadwal-penjemputan/$jadwalId/mulai');
-        debugPrint("ROUTE UTAMA GAGAL. MENCOBA FALLBACK URL: $fallbackUrl");
-
-        final fallbackResponse = await http.put(
-          fallbackUrl,
-          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? "GAGAL MENGUBAH STATUS!"),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 5),
+          ),
         );
-
-        debugPrint("RESPONS FALLBACK - STATUS CODE: ${fallbackResponse.statusCode}");
-        debugPrint("RESPONS FALLBACK - BODY: ${fallbackResponse.body}");
-
-        if (fallbackResponse.statusCode == 200) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("STATUS TUGAS: BERHASIL DIMULAI (FALLBACK)!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              backgroundColor: Colors.blueAccent,
-            ),
-          );
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("GAGAL MENGUBAH STATUS! Server Merespons: ${fallbackResponse.statusCode}"),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-        await getJadwal();
+        setState(() => isLoading = false);
       }
     } catch (e) {
       debugPrint("ERROR CRITICAL SAAT KLIK TOMBOL JEMPUT: $e");
@@ -129,6 +100,7 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     List<dynamic> filteredList = jadwalList.where((item) {
@@ -159,7 +131,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // HEADER DENGAN UKURAN TEXT LEBIH MANTAP
             SliverToBoxAdapter(
               child: Container(
                 width: double.infinity,
@@ -188,7 +159,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
               ),
             ),
 
-            // FILTER CHIPS LEBIH TINGGI & TEKS TEBAL
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 18),
@@ -203,7 +173,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
               ),
             ),
 
-            // LIST DATA
             filteredList.isEmpty
                 ? SliverFillRemaining(
               child: Center(
@@ -350,7 +319,6 @@ class JadwalCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Nama Nasabah Dibuat Sangat Jelas & Besar
           Text(nama, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: darkTextColor, letterSpacing: -0.5)),
           const SizedBox(height: 8),
           Row(
@@ -379,7 +347,6 @@ class JadwalCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          // TOMBOL TARGET SENTUH LEBAR & TINGGI (54px)
           Row(
             children: [
               Expanded(

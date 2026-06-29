@@ -90,6 +90,38 @@ class _DashboardKurirState extends State<DashboardKurir> {
     }
   }
 
+  Future<void> mulaiJemputKurir(int jadwalId) async {
+    try {
+      setState(() => isLoading = true);
+      final result = await JadwalService.mulaiJemput(jadwalId);
+
+      if (result['success'] == true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("STATUS TUGAS: DALAM PROSES PENJEMPUTAN!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            backgroundColor: Colors.blueAccent,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        await getDashboard();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? "GAGAL MENGUBAH STATUS!"),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("ERROR MULAI JEMPUT: $e");
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -129,7 +161,11 @@ class _DashboardKurirState extends State<DashboardKurir> {
                       dashboardData?['jadwal'] == null ||
                           (dashboardData?['jadwal'] is List && (dashboardData?['jadwal'] as List).isEmpty)
                           ? _buildEmptyTask()
-                          : _UrgentTaskItem(jadwalRaw: dashboardData?['jadwal']),
+                          : _UrgentTaskItem(
+                              jadwalRaw: dashboardData?['jadwal'],
+                              onMulaiJemput: (id) => mulaiJemputKurir(id),
+                              onRefresh: getDashboard,
+                            ),
 
                       const SizedBox(height: 28),
                       _sectionTitle("Ringkasan Performa Kerja"),
@@ -472,7 +508,14 @@ class _QuickActionsLayout extends StatelessWidget {
 
 class _UrgentTaskItem extends StatelessWidget {
   final dynamic jadwalRaw;
-  const _UrgentTaskItem({required this.jadwalRaw});
+  final Function(int) onMulaiJemput;
+  final VoidCallback onRefresh;
+
+  const _UrgentTaskItem({
+    required this.jadwalRaw,
+    required this.onMulaiJemput,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +530,7 @@ class _UrgentTaskItem extends StatelessWidget {
     Color statusColor;
     if (status == 'selesai' || status == 'completed') {
       statusColor = Colors.green.shade800;
-    } else if (status == 'proses' || status == 'on_progress') {
+    } else if (status == 'proses' || status == 'on_progress' || status == 'dalam_perjalanan') {
       statusColor = Colors.blue.shade800;
     } else {
       statusColor = Colors.orange.shade800;
@@ -584,23 +627,29 @@ class _UrgentTaskItem extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     final int idJadwal = int.tryParse(jadwal['id']?.toString() ?? '0') ?? 0;
                     final int idNasabah = int.tryParse(jadwal['nasabah_id']?.toString() ?? '') ??
                         int.tryParse(jadwal['user_id']?.toString() ?? '') ?? 0;
 
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ScanBarcodePage(
-                          jadwalId: idJadwal,
-                          nasabahId: idNasabah,
+                    String st = status.toLowerCase();
+                    if (st == 'terjadwal' || st == 'pending') {
+                      onMulaiJemput(idJadwal);
+                    } else if (st == 'proses' || st == 'on_progress' || st == 'dalam_perjalanan') {
+                      final res = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScanBarcodePage(
+                            jadwalId: idJadwal,
+                            nasabahId: idNasabah,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                      if (res == true) onRefresh();
+                    }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: status == 'proses' ? Colors.orange.shade800 : primaryColor,
+                    backgroundColor: (status == 'proses' || status == 'on_progress' || status == 'dalam_perjalanan') ? Colors.orange.shade800 : primaryColor,
                     disabledBackgroundColor: Colors.grey.shade200,
                     minimumSize: const Size(0, 50),
                     elevation: (status == 'selesai') ? 0 : 2,
@@ -609,14 +658,14 @@ class _UrgentTaskItem extends StatelessWidget {
                   icon: Icon(
                       status == 'selesai'
                           ? Icons.check_circle_rounded
-                          : (status == 'proses' ? Icons.scale_rounded : Icons.local_shipping_rounded),
+                          : ((status == 'proses' || status == 'on_progress' || status == 'dalam_perjalanan') ? Icons.scale_rounded : Icons.local_shipping_rounded),
                       color: status == 'selesai' ? Colors.grey.shade500 : Colors.white,
                       size: 18
                   ),
                   label: Text(
                     status == 'terjadwal' || status == 'pending'
                         ? "MULAI JEMPUT"
-                        : (status == 'proses' ? "TIMBANG SAMPAH" : "SUDAH SELESAI"),
+                        : ((status == 'proses' || status == 'on_progress' || status == 'dalam_perjalanan') ? "TIMBANG SAMPAH" : "SUDAH SELESAI"),
                     style: TextStyle(
                         color: status == 'selesai' ? Colors.grey.shade600 : Colors.white,
                         fontWeight: FontWeight.w900,
