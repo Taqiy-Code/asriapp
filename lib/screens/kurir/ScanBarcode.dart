@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:asriapp/config.dart';
 import '../kurir/SetorSampahPage.dart';
 
@@ -37,38 +38,63 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
     setState(() => isScanCompleted = true);
 
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/nasabah/qrcode/$kode'));
-      
+      // 1. Ambil ID Kurir yang sedang login dari SharedPreferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      int kurirId = 0;
+      if (prefs.containsKey('user_id')) {
+        final rawId = prefs.get('user_id');
+        if (rawId is int) {
+          kurirId = rawId;
+        } else if (rawId is String) {
+          kurirId = int.tryParse(rawId) ?? 0;
+        }
+      }
+
+      // 2. Kirim kode string asli (misal: 'NSB001') langsung ke backend
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/kurir/scan-qr'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'nasabah_id': kode.trim(), // Mengirim string 'NSB001' langsung tanpa di-parse ke int
+          'kurir_id': kurirId,
+        }),
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final int scannedId = data['id'];
 
-        // Jika ini dari Dashboard (jadwalId 0) atau Scanned ID cocok dengan jadwal
-        int finalJadwalId = (widget.jadwalId != 0 && scannedId == widget.nasabahId) 
-            ? widget.jadwalId 
-            : 0;
+        if (data['status'] == 'success') {
+          final String mode = data['mode'];
+          final int? idTransaksiInduk = data['id_transaksi'];
+          final Map<String, dynamic> nasabah = data['nasabah'];
 
-        if (mounted) {
-          // Langsung pindah ke Form Timbang tanpa dialog bertele-tele
-          final result = await Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SetorSampahPage(
-                nasabahId: scannedId,
-                namaNasabah: data['name'],
-                alamat: data['alamat'],
-                barcode: kode,
-                jadwalId: finalJadwalId,
+          // Matikan controller kamera sebelum berpindah halaman agar memori aman (mencegah BufferQueue abandoned)
+          await controller.stop();
+
+          if (mounted) {
+            final result = await Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SetorSampahPage(
+                  nasabahId: nasabah['id'], // ID asli integer dari database (29)
+                  namaNasabah: nasabah['nama'],
+                  alamat: nasabah['alamat'],
+                  barcode: kode,
+                  jadwalId: widget.jadwalId != 0 ? widget.jadwalId : 0,
+                ),
               ),
-            ),
-          );
-          if (result == true) Navigator.pop(context, true);
+            );
+            if (result == true) Navigator.pop(context, true);
+          }
+        } else {
+          _showError(data['message'] ?? "Gagal memvalidasi status nasabah.");
         }
       } else {
-        _showError("Nasabah tidak ditemukan!");
+        _showError("Nasabah atau data jadwal tidak ditemukan di server!");
       }
     } catch (e) {
-      _showError("Gagal memproses data.");
+      debugPrint("ERROR SCAN QR: $e");
+      _showError("Gagal memproses rute penjemputan.");
     }
   }
 
@@ -80,7 +106,11 @@ class _ScanBarcodePageState extends State<ScanBarcodePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(backgroundColor: primaryColor, title: const Text("Scan QR Nasabah", style: TextStyle(color: Colors.white))),
+      appBar: AppBar(
+        backgroundColor: primaryColor,
+        title: const Text("Scan QR Nasabah", style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: MobileScanner(
         controller: controller,
         onDetect: (capture) {

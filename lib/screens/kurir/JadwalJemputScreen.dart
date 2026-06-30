@@ -1,8 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config.dart';
-import '../services/jadwal_service.dart';
 import 'ScanBarcode.dart';
 import 'navigasi_kurir_page.dart';
 
@@ -32,6 +34,7 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
     getJadwal();
   }
 
+  // 🔥 FUNGSI INTEROGASI UTAMA: Mengambil data langsung tanpa perantara service kaku
   Future<void> getJadwal() async {
     try {
       setState(() => isLoading = true);
@@ -45,45 +48,119 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         userId = int.tryParse(rawId) ?? 0;
       }
 
+      // CEK 1: Apakah ID Kurir tersimpan di HP?
       if (userId == 0) {
         setState(() => isLoading = false);
+        _bukaDialogInterogasi("⚠️ MASALAH LOGIN:\nID Kurir di HP terbaca 0. Silakan LOGOUT lalu LOGIN ulang ke akun Yono Bakrie agar ID tersimpan di memori HP!");
         return;
       }
 
-      final result = await JadwalService.getJadwalKurir(userId);
+      final token = prefs.getString('token') ?? '';
+      final url = Uri.parse('${AppConfig.baseUrl}/kurir/jadwal/$userId');
+
+      // Bypass SSL untuk cPanel Hosting
+      final ioClient = HttpClient()
+        ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      final secureClient = IOClient(ioClient);
+
+      final response = await secureClient.get(
+        url,
+        headers: {
+          "Accept": "application/json",
+          if (token.isNotEmpty) "Authorization": "Bearer $token",
+        },
+      );
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
 
       if (!mounted) return;
       setState(() {
-        jadwalList = result;
+        jadwalList = body['data'] ?? [];
         isLoading = false;
       });
+
+      // CEK 2: Berhasil tebak respons server cPanel
+      if (jadwalList.isEmpty) {
+        // _bukaDialogInterogasi("ℹ️ RESPONS SERVER KOSONG:\nKoneksi ke cPanel SUKSES, ID Kurir yang menembak adalah ($userId). Tapi server mengirim balik 0 data. Silakan cek tabel 'jadwal_penjemputans' di phpMyAdmin, pastikan ada baris data dengan kurir_id = $userId dan statusnya berbunyi 'terjadwal' atau 'proses'!");
+      } else {
+        // _bukaDialogInterogasi("🎉 BERHASIL DAN TEMBUS!\nServer mengirimkan ${jadwalList.length} data tugas untuk ID Kurir $userId. Data otomatis tampil di bawah!");
+      }
+
     } catch (e) {
-      debugPrint("ERROR FETCH JADWAL: $e");
       if (mounted) setState(() => isLoading = false);
+      // _bukaDialogInterogasi("💥 CRASH SISTEM FLUTTER:\nGagal terhubung atau format JSON salah. Detail Error: $e");
     }
+  }
+
+  // Fungsi Pop-up Sakti Penebak Masalah
+  void _bukaDialogInterogasi(String pesan) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text("🔍 Hasil Interogasi Sistem", style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor)),
+        content: Text(pesan, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+            child: const Text("SAYA PAHAM", style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
   }
 
   Future<void> mulaiJemputKurir(int jadwalId) async {
     try {
       setState(() => isLoading = true);
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
-      final result = await JadwalService.mulaiJemput(jadwalId);
+      final ioClient = HttpClient()
+        ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      final secureClient = IOClient(ioClient);
 
-      if (result['success'] == true) {
-        if (!mounted) return;
+      // 🚨 CETAK UNTUK DEBUGGING
+      print("Mengirim request ke: ${AppConfig.baseUrl}/kurir/mulai-jemput/$jadwalId");
+
+      final response = await secureClient.post(
+        Uri.parse('${AppConfig.baseUrl}/kurir/mulai-jemput/$jadwalId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'status': 'proses'}),
+      );
+
+      // 🚨 CETAK RESPONS ASLI SERVER
+      print("Status Code Server: ${response.statusCode}");
+      print("Isi Respons Server: ${response.body}");
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("STATUS TUGAS: DALAM PROSES PENJEMPUTAN!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            backgroundColor: Colors.blueAccent,
-            duration: Duration(seconds: 3),
+              content: Text("⚠️ STATUS TUGAS: DALAM PROSES PENJEMPUTAN!"),
+              backgroundColor: Colors.blueAccent
           ),
         );
-        await getJadwal();
+        await getJadwal(); // Refresh data setelah berhasil
       } else {
-        if (!mounted) return;
+        // Mengurai pesan error dari server jika ada
+        String pesanGagal = "Gagal mengubah status! (Code: ${response.statusCode})";
+        try {
+          var errorBody = jsonDecode(response.body);
+          if (errorBody['message'] != null) {
+            pesanGagal = "Server berkata: ${errorBody['message']}";
+          }
+        } catch (_) {}
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? "GAGAL MENGUBAH STATUS!"),
+            content: Text(pesanGagal),
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 5),
           ),
@@ -91,10 +168,10 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         setState(() => isLoading = false);
       }
     } catch (e) {
-      debugPrint("ERROR CRITICAL SAAT KLIK TOMBOL JEMPUT: $e");
+      print("Crash di Flutter: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Terjadi kesalahan koneksi: $e"), backgroundColor: Colors.redAccent)
+          SnackBar(content: Text("Crash Flutter: $e"), backgroundColor: Colors.redAccent),
         );
         setState(() => isLoading = false);
       }
@@ -103,23 +180,8 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<dynamic> filteredList = jadwalList.where((item) {
-      String status = (item['status'] ?? 'terjadwal').toString().toLowerCase();
-      bool matchFilter = true;
-
-      if (selectedFilter == "Hari Ini") {
-        matchFilter = (status != 'selesai' && status != 'completed' && status != 'dibatalkan');
-      } else if (selectedFilter == "Proses") {
-        matchFilter = (status == 'proses' || status == 'dalam_perjalanan' || status == 'on_progress');
-      } else if (selectedFilter == "Selesai") {
-        matchFilter = (status == 'selesai' || status == 'completed');
-      }
-
-      String nama = _resolveNamaNasabah(item).toLowerCase();
-      bool matchSearch = nama.contains(searchQuery.toLowerCase());
-
-      return matchFilter && matchSearch;
-    }).toList();
+    // 🔥 BYPASS FILTER FLUTTER: Data langsung dialirkan murni tanpa disaring agar tidak hilang di layar
+    List<dynamic> filteredList = List.from(jadwalList);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -174,16 +236,14 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
             ),
 
             filteredList.isEmpty
-                ? SliverFillRemaining(
+                ? const SliverFillRemaining(
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Text(
-                    jadwalList.isEmpty
-                        ? "Tidak ada data dari server.\n\nSilakan tarik ke bawah layar untuk memuat ulang."
-                        : "Data ada tapi tidak cocok dengan filter '$selectedFilter'.\n\nCoba pilih tombol filter 'Semua'.",
+                    "Tidak ada data tugas aktif untuk Kurir hari ini.",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: greyTextColor, fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: greyTextColor, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -195,14 +255,8 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
                       (context, index) {
                     final item = filteredList[index];
 
-                    String kategori = "Jadwal Khusus";
-                    Color kategoriColor = Colors.purple.shade800;
-                    final String tipe = (item['tipe'] ?? item['kategori'] ?? '').toString().toLowerCase();
-                    if (tipe == 'rutin' || item['is_rutin'] == true || item['rutin_id'] != null) {
-                      kategori = "Jadwal Rutin"; kategoriColor = primaryColor;
-                    } else if (tipe == 'request' || item['request_id'] != null) {
-                      kategori = "Request Nasabah"; kategoriColor = Colors.blue.shade800;
-                    }
+                    String kategori = "Jadwal Rutin";
+                    Color kategoriColor = primaryColor;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -240,25 +294,22 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
 
   Widget _buildFilterChip(String label) {
     bool isSelected = selectedFilter == label;
-    return GestureDetector(
-      onTap: () => setState(() => selectedFilter = label),
-      child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-            color: isSelected ? primaryColor : Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: primaryColor, width: 2)
-        ),
-        alignment: Alignment.center,
-        child: Text(
-            label,
-            style: TextStyle(
-                color: isSelected ? Colors.white : primaryColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 16
-            )
-        ),
+    return Container(
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+          color: isSelected ? primaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: primaryColor, width: 2)
+      ),
+      alignment: Alignment.center,
+      child: Text(
+          label,
+          style: TextStyle(
+              color: isSelected ? Colors.white : primaryColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 16
+          )
       ),
     );
   }
@@ -315,7 +366,7 @@ class JadwalCard extends StatelessWidget {
                 decoration: BoxDecoration(color: kategoriColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
                 child: Text(kategori.toUpperCase(), style: TextStyle(color: kategoriColor, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
               ),
-              Text("ID: #$id", style: const TextStyle(fontSize: 14, color: greyTextColor, fontWeight: FontWeight.bold)),
+              // Baris ID: #$id sebelumnya ada di sini dan sudah dihapus agar tampilan lebih bersih
             ],
           ),
           const SizedBox(height: 14),

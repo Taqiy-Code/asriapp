@@ -12,7 +12,6 @@ import '../models/jenis_sampah.dart';
 import '../services/setor_sampah_service.dart';
 import '../services/jenis_sampah_service.dart';
 
-// Constants moved to a separate style object or could be in a constants file
 class AppColors {
   static const primary = Color(0xFF1E521E);
   static const secondary = Color(0xFF4CAF50);
@@ -28,6 +27,7 @@ class SetorSampahPage extends StatefulWidget {
   final String alamat;
   final String barcode;
   final int jadwalId;
+  final Map<String, dynamic> jadwalData;
 
   const SetorSampahPage({
     super.key,
@@ -35,12 +35,15 @@ class SetorSampahPage extends StatefulWidget {
     required this.namaNasabah,
     required this.alamat,
     required this.barcode,
-    required this.jadwalId,
+    this.jadwalId = 0,
+    this.jadwalData = const {},
   });
 
   @override
   State<SetorSampahPage> createState() => _SetorSampahPageState();
 }
+
+class _ScanBarcodePageState {}
 
 class _SetorSampahPageState extends State<SetorSampahPage> {
   final TextEditingController _beratController = TextEditingController();
@@ -50,17 +53,18 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
   final _picker = ImagePicker();
   List<JenisSampah> _jenisSampahList = [];
   JenisSampah? _selectedJenisSampah;
-  
+
   bool _isCapturingIot = false;
   bool _isAutoloadLoading = false;
-  bool _isRequestDataFromNasabah = false; 
+  bool _isRequestDataFromNasabah = false;
   bool _isSubmitting = false;
 
   List<Map<String, dynamic>> _keranjangSampah = [];
   int _grandTotalSemua = 0;
   int _selectedIndexKeranjang = 0;
 
-  bool get isRealRequestNasabah => widget.jadwalId == 0 && _isRequestDataFromNasabah;
+  // 🧠 Logika penentu: Apakah ini benar-benar Request dari Nasabah yang beratnya masih 0?
+  bool get isRealRequestNasabah => _isRequestDataFromNasabah;
 
   @override
   void initState() {
@@ -70,9 +74,44 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
 
   Future<void> _loadInitialData() async {
     await _getJenisSampah();
-    // Autoload hanya dilakukan jika masuk melalui jalur Scan (jadwalId == 0)
-    if (widget.jadwalId == 0) {
+
+    // 🧠 Jika datang dari rute jadwal tugas kurir, deteksi isi datanya langsung
+    if (widget.jadwalId != 0 && widget.jadwalData.isNotEmpty) {
+      _evaluasiJadwalData();
+    } else if (widget.jadwalId == 0) {
       await _cekDanAutoloadRequestNasabah();
+    }
+  }
+
+  // 🧠 FUNGSI BARU: Mengevaluasi apakah data dari daftar tugas bermuara ke Request Nasabah (berat 0) atau Jadwal Rutin
+  void _evaluasiJadwalData() {
+    var beratAwal = widget.jadwalData['berat'] ?? widget.jadwalData['total_berat'];
+    double beratDouble = double.tryParse(beratAwal.toString()) ?? 0.0;
+
+    if (beratDouble == 0.0) {
+      // 🚨 JALUR REQUEST NASABAH: Kunci jenis sampah ke keranjang otomatis
+      setState(() {
+        _isRequestDataFromNasabah = true;
+        _keranjangSampah = [
+          {
+            'jenis_sampah_id': widget.jadwalData['jenis_sampah_id'] ?? 0,
+            'nama_sampah': widget.jadwalData['jenis_sampah'] ?? widget.jadwalData['nama_jenis'] ?? 'Sampah Request',
+            'berat': 0.0,
+            'harga_per_kg': widget.jadwalData['harga_per_kg'] ?? widget.jadwalData['harga'] ?? 0,
+            'total_item': 0,
+          }
+        ];
+        _selectedIndexKeranjang = 0;
+        _hitungGrandTotal();
+      });
+      _tampilkanPesan("📦 Terdeteksi: Request Sampah Nasabah!", AppColors.primary);
+    } else {
+      // 🚨 JALUR JADWAL RUTIN: Biarkan kosong agar kurir bisa input manual multi-sampah
+      setState(() {
+        _isRequestDataFromNasabah = false;
+        _keranjangSampah = [];
+      });
+      _tampilkanPesan("🗓️ Terdeteksi: Jalur Jadwal Rutin Admin (Form Manual)", AppColors.primary);
     }
   }
 
@@ -99,7 +138,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
         List<dynamic> itemsDariNasabah = requestData['items'];
 
         setState(() {
-          _isRequestDataFromNasabah = true; 
+          _isRequestDataFromNasabah = true;
           _keranjangSampah = itemsDariNasabah.map((item) => {
             'jenis_sampah_id': item['jenis_sampah_id'],
             'nama_sampah': item['nama_sampah'] ?? item['nama_jenis'] ?? 'Sampah',
@@ -111,8 +150,6 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
           _hitungGrandTotal();
         });
         _tampilkanPesan("✅ Data request berhasil dimuat!", AppColors.primary);
-      } else {
-        _tampilkanPesan("ℹ️ Nasabah tidak punya request aktif. Mode manual aktif.", Colors.blue);
       }
     } catch (e) {
       debugPrint("Gagal memuat request detail: $e");
@@ -126,12 +163,11 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
     setState(() => _isCapturingIot = true);
 
     final berat = await SetorSampahService.fetchBeratIot();
-    
+
     if (mounted) {
       setState(() => _isCapturingIot = false);
       if (berat != null) {
         _beratController.text = berat.toString();
-        _tampilkanPesan("Berat berhasil dimuat dari IoT: $berat Kg", AppColors.primary);
       } else {
         _tampilkanPesan("Gagal terhubung ke Timbangan IoT", Colors.red.shade800);
       }
@@ -204,6 +240,10 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
     });
   }
 
+  void _hideKeyboard() {
+    FocusScope.of(context).unfocus();
+  }
+
   void _hitungGrandTotal() {
     _grandTotalSemua = _keranjangSampah.fold(0, (sum, item) => sum + (item['total_item'] as int));
   }
@@ -218,6 +258,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
   }
 
   Future<void> _simpanSetorSampah() async {
+    _hideKeyboard();
     if (_keranjangSampah.isEmpty) {
       _tampilkanPesan("Keranjang masih kosong!", Colors.red.shade800);
       return;
@@ -231,21 +272,16 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
       }
     }
 
-    if (_imageFile == null) {
-      _tampilkanPesan("Harap ambil foto bukti penimbangan!", Colors.orange.shade800);
-      return;
-    }
-
     setState(() => _isSubmitting = true);
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final kurirId = prefs.getInt('user_id') ?? 0;
 
-      String judulDinamis = _keranjangSampah.length == 1 
-          ? "Sampah ${_keranjangSampah[0]['nama_sampah']}" 
+      String judulDinamis = _keranjangSampah.length == 1
+          ? "Sampah ${_keranjangSampah[0]['nama_sampah']}"
           : "Sampah ${_keranjangSampah[0]['nama_sampah']} & Lainnya";
-      
+
       final response = await SetorSampahService.submitSetoran(
         userId: widget.nasabahId,
         kurirId: kurirId,
@@ -254,17 +290,21 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
         catatan: isRealRequestNasabah ? "Setoran request nasabah" : "Setoran manual kurir",
         jadwalId: widget.jadwalId,
         sampahList: _keranjangSampah,
-        imagePath: _imageFile!.path,
+        imagePath: _imageFile?.path ?? "",
       );
 
       if (mounted) {
         setState(() => _isSubmitting = false);
         if (response.statusCode == 200 || response.statusCode == 201) {
-          _tampilkanPesan("Setoran sukses disimpan!", AppColors.primary);
+          _tampilkanPesan("✅ Setoran sukses disimpan!", AppColors.primary);
           Navigator.pop(context, true);
         } else {
-          final errorData = jsonDecode(response.body);
-          _tampilkanPesan("Gagal: ${errorData['message'] ?? response.reasonPhrase}", Colors.red);
+          try {
+            final errorData = jsonDecode(response.body);
+            _tampilkanPesan("Gagal: ${errorData['message'] ?? response.reasonPhrase}", Colors.red);
+          } catch (_) {
+            _tampilkanPesan("Terjadi kendala sistem di hosting (Error ${response.statusCode})", Colors.red);
+          }
         }
       }
     } catch (e) {
@@ -282,7 +322,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
         content: Text(pesan),
         backgroundColor: warnaBg,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
@@ -418,10 +458,10 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
                 onPressed: _isCapturingIot ? null : _fetchBeratFromIot,
                 icon: _isCapturingIot
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
                     : const Icon(Icons.monitor_weight_rounded),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.orange,
@@ -517,7 +557,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("3. Foto Bukti", style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text("3. Foto Bukti (Opsional)", style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
         GestureDetector(
           onTap: _pickImage,
@@ -548,7 +588,7 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
           backgroundColor: AppColors.primary,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: _isSubmitting 
+        child: _isSubmitting
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
             : const Text("SIMPAN DATA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),

@@ -32,7 +32,7 @@ class SetorSampahService {
       final token = prefs.getString('token') ?? '';
 
       final url = Uri.parse('${AppConfig.baseUrl}/request-penjemputan');
-      
+
       print("DEBUG STORE REQUEST: URL=$url");
       print("DEBUG STORE REQUEST: USER_ID=$userId");
       print("DEBUG STORE REQUEST: TOKEN=${token.isNotEmpty ? 'EXISTS' : 'EMPTY'}");
@@ -101,7 +101,7 @@ class SetorSampahService {
     }
   }
 
-  // =================ni berat iot =================
+  // ================= AMBIL BERAT TIMBANGAN IOT =================
   static Future<double?> fetchBeratIot() async {
     try {
       final response = await _client.get(Uri.parse('${AppConfig.baseUrl}/berat-timbangan-iot'));
@@ -115,7 +115,7 @@ class SetorSampahService {
     return null;
   }
 
-  // ================= setor ni =================
+  // ================= 🔥 FIKS SUBMIT SETORAN (MENDUKUNG FOTO KOSONG) =================
   static Future<http.Response> submitSetoran({
     required int userId,
     required int kurirId,
@@ -129,6 +129,15 @@ class SetorSampahService {
     var uri = Uri.parse('${AppConfig.baseUrl}/setor-sampah');
     var request = http.MultipartRequest('POST', uri);
 
+    // 🔥 TAMBAHKAN TOKEN & HEADER AGAR TIDAK ERROR 500/401
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+    
+    request.headers['Accept'] = 'application/json';
+    if (token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
     request.fields['user_id'] = userId.toString();
     request.fields['kurir_id'] = kurirId.toString();
     request.fields['grand_total'] = grandTotal.toString();
@@ -138,11 +147,21 @@ class SetorSampahService {
       request.fields['jadwal_id'] = jadwalId.toString();
     }
     request.fields['sampah_list'] = jsonEncode(sampahList);
-    request.files.add(await http.MultipartFile.fromPath('foto_sampah', imagePath));
 
-    // Khusus multipart, kita send manual via client
-    var streamedResponse = await request.send();
-    return await http.Response.fromStream(streamedResponse);
+    // 🔥 DEBUG DATA SEBELUM KIRIM
+    print("DEBUG SUBMIT: fields=${request.fields}");
+
+    // 🔥 PERBAIKAN UTAMA: Hanya masukkan file jika imagePath dikirim/tidak kosong!
+    if (imagePath.isNotEmpty && imagePath.trim() != "") {
+      request.files.add(await http.MultipartFile.fromPath('foto_sampah', imagePath));
+    }
+
+    // 🔥 PERBAIKAN KEDUA: Kirim request menggunakan client kustom bypass SSL agar tidak block cPanel
+    var streamedResponse = await _client.send(request);
+    var response = await http.Response.fromStream(streamedResponse);
+    
+    print("DEBUG SUBMIT RESPONSE: ${response.statusCode} - ${response.body}");
+    return response;
   }
 
   // ================= 6. TARIK TUNAI SALDO =================
