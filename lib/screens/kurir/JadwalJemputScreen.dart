@@ -34,7 +34,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
     getJadwal();
   }
 
-  // 🔥 FUNGSI INTEROGASI UTAMA: Mengambil data langsung tanpa perantara service kaku
   Future<void> getJadwal() async {
     try {
       setState(() => isLoading = true);
@@ -48,17 +47,15 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         userId = int.tryParse(rawId) ?? 0;
       }
 
-      // CEK 1: Apakah ID Kurir tersimpan di HP?
       if (userId == 0) {
         setState(() => isLoading = false);
-        _bukaDialogInterogasi("⚠️ MASALAH LOGIN:\nID Kurir di HP terbaca 0. Silakan LOGOUT lalu LOGIN ulang ke akun Yono Bakrie agar ID tersimpan di memori HP!");
+        _bukaDialogInterogasi("⚠️ MASALAH LOGIN:\nID Kurir di HP terbaca 0. Silakan LOGOUT lalu LOGIN ulang agar ID tersimpan di memori HP!");
         return;
       }
 
       final token = prefs.getString('token') ?? '';
       final url = Uri.parse('${AppConfig.baseUrl}/kurir/jadwal/$userId');
 
-      // Bypass SSL untuk cPanel Hosting
       final ioClient = HttpClient()
         ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
       final secureClient = IOClient(ioClient);
@@ -79,20 +76,11 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         isLoading = false;
       });
 
-      // CEK 2: Berhasil tebak respons server cPanel
-      if (jadwalList.isEmpty) {
-        // _bukaDialogInterogasi("ℹ️ RESPONS SERVER KOSONG:\nKoneksi ke cPanel SUKSES, ID Kurir yang menembak adalah ($userId). Tapi server mengirim balik 0 data. Silakan cek tabel 'jadwal_penjemputans' di phpMyAdmin, pastikan ada baris data dengan kurir_id = $userId dan statusnya berbunyi 'terjadwal' atau 'proses'!");
-      } else {
-        // _bukaDialogInterogasi("🎉 BERHASIL DAN TEMBUS!\nServer mengirimkan ${jadwalList.length} data tugas untuk ID Kurir $userId. Data otomatis tampil di bawah!");
-      }
-
     } catch (e) {
       if (mounted) setState(() => isLoading = false);
-      // _bukaDialogInterogasi("💥 CRASH SISTEM FLUTTER:\nGagal terhubung atau format JSON salah. Detail Error: $e");
     }
   }
 
-  // Fungsi Pop-up Sakti Penebak Masalah
   void _bukaDialogInterogasi(String pesan) {
     showDialog(
       context: context,
@@ -111,6 +99,9 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
     );
   }
 
+  // =========================================================================
+  // 🛠️ PERBAIKAN: METHOD PATCH & ALAMAT ENDPOINT BARU SEUSAI ROUTE LARAVEL
+  // =========================================================================
   Future<void> mulaiJemputKurir(int jadwalId) async {
     try {
       setState(() => isLoading = true);
@@ -121,11 +112,13 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
       final secureClient = IOClient(ioClient);
 
-      // 🚨 CETAK UNTUK DEBUGGING
-      print("Mengirim request ke: ${AppConfig.baseUrl}/kurir/mulai-jemput/$jadwalId");
+      // Endpoint diarahkan ke rute tunggal baru di Laravel
+      final targetUrl = "${AppConfig.baseUrl}/jadwal-penjemputan/$jadwalId/mulai";
+      print("DEBUG PATCH REQUEST TO: $targetUrl");
 
-      final response = await secureClient.post(
-        Uri.parse('${AppConfig.baseUrl}/kurir/mulai-jemput/$jadwalId'),
+      // Mengubah POST lama menjadi .patch sejalan dengan RESTful API
+      final response = await secureClient.patch(
+        Uri.parse(targetUrl),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -134,7 +127,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
         body: jsonEncode({'status': 'proses'}),
       );
 
-      // 🚨 CETAK RESPONS ASLI SERVER
       print("Status Code Server: ${response.statusCode}");
       print("Isi Respons Server: ${response.body}");
 
@@ -147,14 +139,13 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
               backgroundColor: Colors.blueAccent
           ),
         );
-        await getJadwal(); // Refresh data setelah berhasil
+        await getJadwal();
       } else {
-        // Mengurai pesan error dari server jika ada
         String pesanGagal = "Gagal mengubah status! (Code: ${response.statusCode})";
         try {
           var errorBody = jsonDecode(response.body);
           if (errorBody['message'] != null) {
-            pesanGagal = "Server berkata: ${errorBody['message']}";
+            pesanGagal = "${errorBody['message']}";
           }
         } catch (_) {}
 
@@ -180,7 +171,6 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BYPASS FILTER FLUTTER: Data langsung dialirkan murni tanpa disaring agar tidak hilang di layar
     List<dynamic> filteredList = List.from(jadwalList);
 
     return Scaffold(
@@ -255,8 +245,17 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
                       (context, index) {
                     final item = filteredList[index];
 
-                    String kategori = "Jadwal Rutin";
-                    Color kategoriColor = primaryColor;
+                    // =========================================================================
+                    // 🧠 INTERPRETASI LABEL DINAMIS HASIL KIRIMAN DARI LARAVEL
+                    // =========================================================================
+                    String kategori = (item['jenis_tugas_label'] ?? 'JADWAL MANUAL').toString().toUpperCase();
+                    Color kategoriColor = Colors.grey.shade700;
+
+                    if (kategori == 'REQUEST NASABAH') {
+                      kategoriColor = Colors.orange.shade800;
+                    } else if (kategori == 'JADWAL RUTIN') {
+                      kategoriColor = Colors.blue.shade800;
+                    }
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -361,12 +360,12 @@ class JadwalCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Badge Atas Dinamis Mengikuti Pola Warna Kategori
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(color: kategoriColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Text(kategori.toUpperCase(), style: TextStyle(color: kategoriColor, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                child: Text(kategori, style: TextStyle(color: kategoriColor, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
               ),
-              // Baris ID: #$id sebelumnya ada di sini dan sudah dihapus agar tampilan lebih bersih
             ],
           ),
           const SizedBox(height: 14),

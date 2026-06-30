@@ -115,24 +115,25 @@ class SetorSampahService {
     return null;
   }
 
-  // ================= 🔥 FIKS SUBMIT SETORAN (MENDUKUNG FOTO KOSONG) =================
-  static Future<http.Response> submitSetoran({
+  // ================= 🔄 PATCH: SUBMIT TIMBANGAN DARI JADWAL ADMIN =================
+  static Future<http.Response> submitSetoranJadwalAdmin({
+    required int id, // ID Transaksi Induk/Setor terkait
     required int userId,
     required int kurirId,
     required int grandTotal,
-    required String judulDinamis,
     required String catatan,
     int? jadwalId,
     required List<Map<String, dynamic>> sampahList,
     required String imagePath,
   }) async {
-    var uri = Uri.parse('${AppConfig.baseUrl}/setor-sampah');
-    var request = http.MultipartRequest('POST', uri);
+    var uri = Uri.parse('${AppConfig.baseUrl}/setor-sampah/jadwal-admin/$id');
 
-    // 🔥 TAMBAHKAN TOKEN & HEADER AGAR TIDAK ERROR 500/401
+    // 🛠️ Perubahan Utama: Gunakan method 'PATCH' untuk MultipartRequest
+    var request = http.MultipartRequest('PATCH', uri);
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
-    
+
     request.headers['Accept'] = 'application/json';
     if (token.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $token';
@@ -141,26 +142,68 @@ class SetorSampahService {
     request.fields['user_id'] = userId.toString();
     request.fields['kurir_id'] = kurirId.toString();
     request.fields['grand_total'] = grandTotal.toString();
-    request.fields['judul_dinamis'] = judulDinamis;
     request.fields['catatan'] = catatan;
     if (jadwalId != null && jadwalId != 0) {
       request.fields['jadwal_id'] = jadwalId.toString();
     }
     request.fields['sampah_list'] = jsonEncode(sampahList);
 
-    // 🔥 DEBUG DATA SEBELUM KIRIM
-    print("DEBUG SUBMIT: fields=${request.fields}");
+    print("DEBUG PATCH JADWAL ADMIN: fields=${request.fields}");
 
-    // 🔥 PERBAIKAN UTAMA: Hanya masukkan file jika imagePath dikirim/tidak kosong!
     if (imagePath.isNotEmpty && imagePath.trim() != "") {
       request.files.add(await http.MultipartFile.fromPath('foto_sampah', imagePath));
     }
 
-    // 🔥 PERBAIKAN KEDUA: Kirim request menggunakan client kustom bypass SSL agar tidak block cPanel
     var streamedResponse = await _client.send(request);
     var response = await http.Response.fromStream(streamedResponse);
-    
-    print("DEBUG SUBMIT RESPONSE: ${response.statusCode} - ${response.body}");
+
+    print("DEBUG PATCH JADWAL ADMIN RESPONSE: ${response.statusCode} - ${response.body}");
+    return response;
+  }
+
+  // ================= 🔄 PATCH: SUBMIT TIMBANGAN DARI REQUEST NASABAH =================
+  static Future<http.Response> submitSetoranRequestNasabah({
+    required int setorSampahId, // ID Induk transaksi 'menunggu_verifikasi' dari nasabah
+    required int userId,
+    required int kurirId,
+    required int grandTotal,
+    required String catatan,
+    int? jadwalId,
+    required List<Map<String, dynamic>> sampahList,
+    required String imagePath,
+  }) async {
+    var uri = Uri.parse('${AppConfig.baseUrl}/setor-sampah/request-nasabah/$setorSampahId');
+
+    // 🛠️ Perubahan Utama: Gunakan method 'PATCH' untuk MultipartRequest
+    var request = http.MultipartRequest('PATCH', uri);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+
+    request.headers['Accept'] = 'application/json';
+    if (token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    request.fields['user_id'] = userId.toString();
+    request.fields['kurir_id'] = kurirId.toString();
+    request.fields['grand_total'] = grandTotal.toString();
+    request.fields['catatan'] = catatan;
+    if (jadwalId != null && jadwalId != 0) {
+      request.fields['jadwal_id'] = jadwalId.toString();
+    }
+    request.fields['sampah_list'] = jsonEncode(sampahList);
+
+    print("DEBUG PATCH REQUEST NASABAH: fields=${request.fields}");
+
+    if (imagePath.isNotEmpty && imagePath.trim() != "") {
+      request.files.add(await http.MultipartFile.fromPath('foto_sampah', imagePath));
+    }
+
+    var streamedResponse = await _client.send(request);
+    var response = await http.Response.fromStream(streamedResponse);
+
+    print("DEBUG PATCH REQUEST NASABAH RESPONSE: ${response.statusCode} - ${response.body}");
     return response;
   }
 

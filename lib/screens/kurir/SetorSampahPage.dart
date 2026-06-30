@@ -278,20 +278,40 @@ class _SetorSampahPageState extends State<SetorSampahPage> {
       final prefs = await SharedPreferences.getInstance();
       final kurirId = prefs.getInt('user_id') ?? 0;
 
-      String judulDinamis = _keranjangSampah.length == 1
-          ? "Sampah ${_keranjangSampah[0]['nama_sampah']}"
-          : "Sampah ${_keranjangSampah[0]['nama_sampah']} & Lainnya";
+      // 🛠️ Pembedaan Eksekusi Fungsi Service Berdasarkan Mode Alur Data
+      final http.Response response;
 
-      final response = await SetorSampahService.submitSetoran(
-        userId: widget.nasabahId,
-        kurirId: kurirId,
-        grandTotal: _grandTotalSemua,
-        judulDinamis: judulDinamis,
-        catatan: isRealRequestNasabah ? "Setoran request nasabah" : "Setoran manual kurir",
-        jadwalId: widget.jadwalId,
-        sampahList: _keranjangSampah,
-        imagePath: _imageFile?.path ?? "",
-      );
+      if (isRealRequestNasabah) {
+        // 🔄 Jalur 1: Menggunakan PATCH Request Nasabah
+        // Ambil ID Setor gantung dari manifes request yang dimuat di awal
+        final int setorSampahId = widget.jadwalData['id'] ?? 0;
+
+        response = await SetorSampahService.submitSetoranRequestNasabah(
+          setorSampahId: setorSampahId,
+          userId: widget.nasabahId,
+          kurirId: kurirId,
+          grandTotal: _grandTotalSemua,
+          catatan: "Setoran request nasabah diselesaikan oleh kurir",
+          jadwalId: widget.jadwalId,
+          sampahList: _keranjangSampah,
+          imagePath: _imageFile?.path ?? "",
+        );
+      } else {
+        // 🔄 Jalur 2: Menggunakan PATCH Jadwal Admin (Rutin / Manual)
+        // Gunakan parameter id jadwal/setor yang dilempar oleh admin web
+        final int targetId = widget.jadwalId;
+
+        response = await SetorSampahService.submitSetoranJadwalAdmin(
+          id: targetId,
+          userId: widget.nasabahId,
+          kurirId: kurirId,
+          grandTotal: _grandTotalSemua,
+          catatan: "Setoran manual kurir via jadwal admin",
+          jadwalId: widget.jadwalId,
+          sampahList: _keranjangSampah,
+          imagePath: _imageFile?.path ?? "",
+        );
+      }
 
       if (mounted) {
         setState(() => _isSubmitting = false);
