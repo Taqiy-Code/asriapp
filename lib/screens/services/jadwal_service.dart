@@ -1,17 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:asriapp/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'client_helper.dart';
 
 class JadwalService {
-  static http.Client get _client {
-    final ioClient = HttpClient()
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    return IOClient(ioClient);
-  }
+  static http.Client get _client => getSafeClient();
 
   // ================= GET JADWAL KURIR =================
   static Future<List<dynamic>> getJadwalKurir(int id) async {

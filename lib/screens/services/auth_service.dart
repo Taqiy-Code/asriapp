@@ -1,21 +1,13 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:asriapp/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'client_helper.dart';
 
 class AuthService {
   // 🔥 1. Buat satu Client Aman yang bisa dipakai bareng-bareng oleh semua fungsi di class ini
-  static http.Client get _client {
-    final ioClient = HttpClient()
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
-        if (host == "pht.my.id") return true;
-        return false;
-      };
-    return IOClient(ioClient);
-  }
+  static http.Client get _client => getSafeClient(trustedHost: 'pht.my.id');
 
   // ================= FUNGSI LOGIN =================
   static Future<Map<String, dynamic>> login({

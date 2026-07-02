@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/io_client.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/client_helper.dart';
 
 import '../../config.dart';
 import 'ScanBarcode.dart';
@@ -56,9 +57,7 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
       final token = prefs.getString('token') ?? '';
       final url = Uri.parse('${AppConfig.baseUrl}/kurir/jadwal/$userId');
 
-      final ioClient = HttpClient()
-        ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-      final secureClient = IOClient(ioClient);
+      final secureClient = getSafeClient();
 
       final response = await secureClient.get(
         url,
@@ -108,9 +107,7 @@ class _JadwalJemputScreenState extends State<JadwalJemputScreen> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
-      final ioClient = HttpClient()
-        ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-      final secureClient = IOClient(ioClient);
+      final secureClient = getSafeClient();
 
       // Endpoint diarahkan ke rute tunggal baru di Laravel
       final targetUrl = "${AppConfig.baseUrl}/jadwal-penjemputan/$jadwalId/mulai";

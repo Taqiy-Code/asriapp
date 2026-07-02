@@ -1,19 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:asriapp/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/tarik_tunai_model.dart';
+import 'client_helper.dart';
 
 class TarikTunaiService {
   final String baseUrl = AppConfig.baseUrl;
 
-  http.Client _getClient() {
-    final HttpClient httpClient = HttpClient()
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    return IOClient(httpClient);
-  }
+  http.Client _getClient() => getSafeClient();
 
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();

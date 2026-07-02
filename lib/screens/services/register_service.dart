@@ -3,17 +3,11 @@ import 'dart:io';
 
 import 'package:asriapp/config.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import '../models/bank_sampah_model.dart';
+import 'client_helper.dart';
 
 class RegisterService {
-  static http.Client get _client {
-    final ioClient = HttpClient()
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
-        return true; // Bypass SSL untuk kemudahan pengembangan
-      };
-    return IOClient(ioClient);
-  }
+  static http.Client get _client => getSafeClient();
 
   static Future<List<BankSampahModel>> getBankSampah() async {
     try {
